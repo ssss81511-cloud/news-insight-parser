@@ -401,7 +401,9 @@ def time_ago_filter(dt):
     return time_ago(dt)
 
 
-if __name__ == '__main__':
+# Initialize application (runs on import, so works with gunicorn)
+def init_app():
+    """Initialize application components"""
     # Create data directory if it doesn't exist
     os.makedirs('data', exist_ok=True)
 
@@ -411,28 +413,34 @@ if __name__ == '__main__':
     # Start scheduler
     scheduler.start()
 
-    print("=" * 50)
-    print("News Insight Parser - Version 2.0")
-    print("=" * 50)
-    print("[OK] Universal architecture")
-    print("[OK] Multi-source support")
-    print("[OK] Signal prioritization")
-    print("[OK] Automatic scheduler")
-    print("=" * 50)
-    print(f"Registered sources: {', '.join(orchestrator.get_registered_sources())}")
-    print("=" * 50)
+    print("=" * 50, flush=True)
+    print("News Insight Parser - Version 2.0", flush=True)
+    print("=" * 50, flush=True)
+    print("[OK] Universal architecture", flush=True)
+    print("[OK] Multi-source support", flush=True)
+    print("[OK] Signal prioritization", flush=True)
+    print("[OK] Automatic scheduler", flush=True)
+    print("=" * 50, flush=True)
+    print(f"Registered sources: {', '.join(orchestrator.get_registered_sources())}", flush=True)
+    print("=" * 50, flush=True)
 
     # Show scheduler status
     sched_status = scheduler.get_status()
     if sched_status.get('auto_parse_enabled', False):
         enabled_sources = [name for name, data in sched_status.get('sources', {}).items()
                           if data.get('enabled', False)]
-        print(f"[SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}")
+        print(f"[SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}", flush=True)
     else:
-        print("[SCHEDULER] Auto-parse: OFF")
+        print("[SCHEDULER] Auto-parse: OFF", flush=True)
 
-    print("=" * 50)
-    print("Starting server on http://localhost:5001")
-    print("=" * 50)
+    print("=" * 50, flush=True)
 
+
+# Initialize on module import (works with both gunicorn and direct run)
+init_app()
+
+
+if __name__ == '__main__':
+    print("Starting server on http://localhost:5001", flush=True)
+    print("=" * 50, flush=True)
     app.run(debug=True, host='0.0.0.0', port=5001)  # Use port 5001 to not conflict
