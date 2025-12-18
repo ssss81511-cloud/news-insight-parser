@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="post-detail-page">
+    <!-- Back button -->
+    <div style="margin-bottom: 20px;">
+        <a href="/posts" class="btn" style="background: #95a5a6; color: white;">← Назад к постам</a>
+    </div>
+
+    <!-- Post Card -->
+    <div class="card post-detail-card">
+        <!-- Header -->
+        <div class="post-header" style="margin-bottom: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <span class="badge" style="background: #3498db; color: white; font-size: 14px;">
+                    {% if post.source == 'hacker_news' %}Hacker News
+                    {% elif post.source == 'reddit' %}Reddit
+                    {% elif post.source == 'product_hunt' %}Product Hunt
+                    {% elif post.source == 'devto' %}Dev.to
+                    {% elif post.source == 'vc_blogs' %}VC Blogs
+                    {% elif post.source == 'techcrunch' %}TechCrunch
+                    {% else %}{{ post.source }}
+                    {% endif %}
+                </span>
+                <span class="badge" style="background: #2ecc71; color: white;">{{ post.score }} points</span>
+                <span class="badge" style="background: {% if post.importance_score > 70 %}#e74c3c{% elif post.importance_score > 50 %}#f39c12{% else %}#27ae60{% endif %}; color: white;">
+                    ⭐ Важность: {{ post.importance_score|int }}/100
+                </span>
+                <span style="color: #7f8c8d; font-size: 14px;">{{ time_ago(post.created_at) }}</span>
+            </div>
+
+            <h2 style="margin: 0; color: #2c3e50; font-size: 28px; line-height: 1.4;">
+                {{ post.title }}
+            </h2>
+        </div>
+
+        <!-- Metadata -->
+        <div class="post-metadata" style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div>
+                    <strong style="color: #7f8c8d;">Автор:</strong> {{ post.author }}
+                </div>
+                <div>
+                    <strong style="color: #7f8c8d;">Комментариев:</strong> {{ post.comments_count }}
+                </div>
+                <div>
+                    <strong style="color: #7f8c8d;">Опубликовано:</strong> {{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else 'N/A' }}
+                </div>
+                {% if post.source_url %}
+                <div>
+                    <strong style="color: #7f8c8d;">Ссылка:</strong>
+                    <a href="{{ post.source_url }}" target="_blank" style="color: #3498db;">Открыть оригинал →</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Content -->
+        {% if post.content %}
+        <div class="post-content" style="margin-bottom: 25px; padding: 20px; background: white; border-left: 4px solid #3498db; line-height: 1.8; font-size: 16px;">
+            {{ clean_html(post.content) }}
+        </div>
+        {% else %}
+        <p style="color: #95a5a6; font-style: italic;">Нет содержимого для отображения.</p>
+        {% endif %}
+
+        <!-- AI Analysis Section -->
+        {% if post.ai_summary %}
+        <div class="ai-analysis-section" style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; color: white;">
+            <h3 style="margin: 0 0 15px 0; color: white;">🤖 AI Анализ</h3>
+
+            <!-- Summary -->
+            <div style="margin-bottom: 15px;">
+                <strong>Краткое содержание:</strong>
+                <p style="margin: 5px 0; font-size: 16px;">{{ post.ai_summary }}</p>
+            </div>
+
+            <!-- Category and Sentiment -->
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                {% if post.ai_category %}
+                <div>
+                    <strong>Категория:</strong>
+                    <span class="badge" style="background: white; color: #667eea; margin-left: 5px;">
+                        {% if post.ai_category == 'problem' %}❗ Проблема
+                        {% elif post.ai_category == 'solution' %}✅ Решение
+                        {% elif post.ai_category == 'product' %}🚀 Продукт
+                        {% elif post.ai_category == 'question' %}❓ Вопрос
+                        {% else %}💬 Обсуждение
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
+                {% if post.ai_sentiment %}
+                <div>
+                    <strong>Sentiment:</strong>
+                    <span class="badge" style="background: white; color: {% if post.ai_sentiment == 'positive' %}#27ae60{% elif post.ai_sentiment == 'negative' %}#e74c3c{% else %}#95a5a6{% endif %}; margin-left: 5px;">
+                        {% if post.ai_sentiment == 'positive' %}😊 Позитив
+                        {% elif post.ai_sentiment == 'negative' %}😞 Негатив
+                        {% else %}😐 Нейтрал
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Key Insights -->
+            {% if post.ai_insights %}
+            {% set insights = post.ai_insights|fromjson %}
+            {% if insights %}
+            <div style="margin-bottom: 15px;">
+                <strong>Ключевые инсайты:</strong>
+                <ul style="margin: 10px 0; padding-left: 25px;">
+                    {% for insight in insights %}
+                    <li style="margin: 5px 0;">{{ insight }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Technologies -->
+            {% if post.ai_technologies %}
+            {% set technologies = post.ai_technologies|fromjson %}
+            {% if technologies %}
+            <div style="margin-bottom: 15px;">
+                <strong>Технологии:</strong>
+                <div style="margin-top: 8px;">
+                    {% for tech in technologies %}
+                    <span class="badge" style="background: white; color: #667eea; margin: 3px;">{{ tech }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Companies -->
+            {% if post.ai_companies %}
+            {% set companies = post.ai_companies|fromjson %}
+            {% if companies %}
+            <div style="margin-bottom: 10px;">
+                <strong>Компании/Стартапы:</strong>
+                <div style="margin-top: 8px;">
+                    {% for company in companies %}
+                    <span class="badge" style="background: white; color: #764ba2; margin: 3px;">{{ company }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <!-- Topics -->
+            {% if post.ai_topics %}
+            {% set topics = post.ai_topics|fromjson %}
+            {% if topics %}
+            <div>
+                <strong>Темы:</strong>
+                <div style="margin-top: 8px;">
+                    {% for topic in topics %}
+                    <span class="badge" style="background: rgba(255,255,255,0.2); color: white; margin: 3px;">{{ topic }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <div style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+                Анализ выполнен: {{ time_ago(post.ai_analyzed_at) if post.ai_analyzed_at else 'N/A' }}
+            </div>
+        </div>
+        {% else %}
+        <!-- No AI analysis yet - show button -->
+        <div style="padding: 15px; background: #f8f9fa; border-radius: 6px; margin-bottom: 20px; text-align: center;">
+            <p style="margin: 0 0 10px 0; color: #7f8c8d;">AI анализ еще не выполнен для этого поста</p>
+            <button onclick="analyzeThisPost({{ post.id }})" class="btn" style="background: #1abc9c; color: white;">
+                🤖 Анализировать с AI
+            </button>
+        </div>
+        {% endif %}
+
+        <!-- Content Hash (for debugging) -->
+        {% if post.duplicate_group_id %}
+        <div style="padding: 10px; background: #fff3cd; border-radius: 4px; margin-bottom: 20px;">
+            <strong style="color: #856404;">🔗 Этот пост является дубликатом:</strong> найдены похожие посты из других источников (смотрите раздел "Связанные посты" ниже)
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Comments Section -->
+    {% if comments %}
+    <div class="card" style="margin-top: 30px;">
+        <h3 style="margin-bottom: 20px; color: #2c3e50;">💬 Комментарии ({{ comments|length }})</h3>
+
+        <div class="comments-list">
+            {% for comment in comments %}
+            <div class="comment-card" style="padding: 15px; margin-bottom: 15px; background: #f8f9fa; border-left: 3px solid #3498db; border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <strong style="color: #2c3e50;">{{ comment.author }}</strong>
+                    <span style="color: #7f8c8d; font-size: 14px;">{{ time_ago(comment.created_at) }}</span>
+                </div>
+                <div style="color: #555; line-height: 1.6;">
+                    {{ clean_html(comment.content) }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin-top: 30px;">
+        <p style="color: #95a5a6; text-align: center; font-style: italic;">Комментариев пока нет</p>
+    </div>
+    {% endif %}
+
+    <!-- Related Posts (Duplicates) -->
+    {% if related_posts %}
+    <div class="card" style="margin-top: 30px;">
+        <h3 style="margin-bottom: 20px; color: #2c3e50;">🔗 Связанные посты (дубликаты из других источников)</h3>
+
+        <div class="related-posts-list">
+            {% for related in related_posts %}
+            <div class="related-post-card" style="padding: 15px; margin-bottom: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #9b59b6;">
+                <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
+                    <div style="flex: 1;">
+                        <a href="/post/{{ related.id }}" style="color: #2c3e50; text-decoration: none; font-weight: 500; font-size: 16px;">
+                            {{ related.title }}
+                        </a>
+                        <div style="margin-top: 8px; display: flex; gap: 10px; align-items: center;">
+                            <span class="badge" style="background: #9b59b6; color: white; font-size: 12px;">{{ related.source }}</span>
+                            <span style="color: #7f8c8d; font-size: 13px;">{{ related.score }} points</span>
+                            <span style="color: #7f8c8d; font-size: 13px;">{{ time_ago(related.created_at) }}</span>
+                        </div>
+                    </div>
+                    {% if related.source_url %}
+                    <a href="{{ related.source_url }}" target="_blank" class="btn" style="background: #3498db; color: white; font-size: 12px; padding: 6px 12px;">
+                        Открыть →
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.post-detail-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px 0;
+}
+
+.post-detail-card {
+    padding: 30px;
+}
+
+.post-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.comments-list {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.comment-card:hover {
+    background: #ecf0f1 !important;
+}
+
+.related-post-card:hover {
+    background: #ecf0f1 !important;
+    cursor: pointer;
+}
+</style>
+
+<script>
+async function analyzeThisPost(postId) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Анализирую...';
+
+    try {
+        const response = await fetch(`/api/ai-analyze-post/${postId}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('AI анализ завершен! Страница обновится.');
+            location.reload();
+        } else {
+            alert('Ошибка: ' + data.message);
+            btn.disabled = false;
+            btn.textContent = '🤖 Анализировать с AI';
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = '🤖 Анализировать с AI';
+    }
+}
+</script>
+{% endblock %}

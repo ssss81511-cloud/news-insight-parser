@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Сигналы - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="signals-page">
+    <h2>Обнаруженные сигналы и инсайты</h2>
+
+    <!-- Filter buttons -->
+    <div class="filter-buttons" style="margin-bottom: 2rem;">
+        <a href="/signals" class="btn btn-active">Все</a>
+        <a href="/signals?priority=critical" class="btn">🔴 Critical</a>
+        <a href="/signals?priority=high" class="btn">🟠 High</a>
+        <a href="/signals?trending=true" class="btn">🔥 Trending</a>
+    </div>
+
+    <div class="info-box">
+        <h4>Что такое сигналы v2.0?</h4>
+        <p>Улучшенная система обнаружения паттернов с приоритизацией и контекстом:</p>
+        <ul>
+            <li><strong>Повторяющиеся проблемы (pains):</strong> Общие боли, упомянутые несколькими людьми</li>
+            <li><strong>Новые термины (language):</strong> Термины и фразы, набирающие популярность</li>
+            <li><strong>Паттерны решений (solutions):</strong> Похожие подходы к решению проблем</li>
+        </ul>
+        <p><strong>Новое:</strong></p>
+        <ul>
+            <li>🎯 <strong>Приоритизация:</strong> Critical / High / Medium / Low</li>
+            <li>💬 <strong>Контекст:</strong> Реальные цитаты из обсуждений</li>
+            <li>📊 <strong>Кросс-источниковый анализ:</strong> Сигналы из разных источников объединяются</li>
+            <li>📈 <strong>Тренды:</strong> Растёт или падает популярность</li>
+        </ul>
+    </div>
+
+    <!-- Cross-source signals -->
+    {% if cross_source_signals %}
+    <div class="card" style="background: #fff3cd; border-left: 4px solid #f39c12;">
+        <h3>🌐 Кросс-источниковые сигналы (HN + Reddit + PH)</h3>
+        <p>Эти сигналы появляются на нескольких площадках — особенно важные!</p>
+        <div class="signals-list">
+            {% for signal in cross_source_signals[:5] %}
+            <div class="signal-card signal-{{ signal.signal_type }}" style="border-left: 4px solid #f39c12;">
+                <div class="signal-header">
+                    <span class="badge badge-{{ signal.signal_type }}">{{ signal.signal_type }}</span>
+                    <span class="badge badge-{{ signal.priority }}">{{ signal.priority }}</span>
+                    <span class="signal-frequency">{{ signal.frequency }} упоминаний</span>
+                    <span style="color: #f39c12;">⭐ {{ signal.importance_score|int }}/100</span>
+                </div>
+
+                <h3>{{ signal.title }}</h3>
+                <p class="signal-description">{{ signal.description }}</p>
+
+                {% if signal.context_snippets %}
+                <div style="background: #f8f9fa; padding: 1rem; margin-top: 0.5rem; border-radius: 4px;">
+                    <strong>💬 Примеры:</strong>
+                    {% set contexts = signal.context_snippets|fromjson %}
+                    <ul style="margin-top: 0.5rem; list-style: none;">
+                        {% for context in contexts[:3] %}
+                        <li style="margin-bottom: 0.5rem; font-style: italic; color: #555;">
+                            "{{ context[:150] }}..."
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="signal-meta">
+                    {% set sources = signal.sources|fromjson %}
+                    <span>Sources: {{ sources|join(', ') }}</span>
+                    <span>First: {{ time_ago(signal.first_seen) }}</span>
+                    <span>Last: {{ time_ago(signal.last_seen) }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- All signals -->
+    {% if signals %}
+    <div class="signals-list">
+        {% for signal in signals %}
+        <div class="signal-card signal-{{ signal.signal_type }}">
+            <div class="signal-header">
+                <span class="badge badge-{{ signal.signal_type }}">{{ signal.signal_type }}</span>
+                <span class="badge badge-{{ signal.priority }}">{{ signal.priority }}</span>
+                <span class="signal-frequency">{{ signal.frequency }} упоминаний</span>
+                {% if signal.is_trending %}
+                    <span style="color: #e74c3c;">🔥 Trending</span>
+                {% endif %}
+                <span style="color: #7f8c8d;">⭐ {{ signal.importance_score|int }}/100</span>
+            </div>
+
+            <h3>{{ signal.title }}</h3>
+            <p class="signal-description">{{ signal.description }}</p>
+
+            <!-- Context snippets -->
+            {% if signal.context_snippets %}
+            <div style="background: #f8f9fa; padding: 1rem; margin-top: 0.5rem; border-radius: 4px;">
+                <strong>💬 Контекст:</strong>
+                {% set contexts = signal.context_snippets|fromjson %}
+                <ul style="margin-top: 0.5rem; list-style: none;">
+                    {% for context in contexts[:3] %}
+                    <li style="margin-bottom: 0.5rem; font-style: italic; color: #555;">
+                        "{{ context[:200] }}..."
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <div class="signal-meta">
+                {% if signal.sources %}
+                    {% set sources = signal.sources|fromjson %}
+                    <span>Sources: {{ sources|join(', ') }}</span>
+                {% endif %}
+                <span>First: {{ time_ago(signal.first_seen) }}</span>
+                <span>Last: {{ time_ago(signal.last_seen) }}</span>
+                {% if signal.growth_rate > 0 %}
+                    <span style="color: #27ae60;">📈 Растёт</span>
+                {% elif signal.growth_rate < 0 %}
+                    <span style="color: #e74c3c;">📉 Падает</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state card">
+        <p>Сигналов пока нет. Нажмите "Анализировать сигналы" на главной странице после сбора данных.</p>
+        <a href="/" class="btn btn-primary">Перейти на панель управления</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.badge-critical {
+    background: #e74c3c;
+    color: white;
+}
+.badge-high {
+    background: #f39c12;
+    color: white;
+}
+.badge-medium {
+    background: #3498db;
+    color: white;
+}
+.badge-low {
+    background: #95a5a6;
+    color: white;
+}
+</style>
+{% endblock %}

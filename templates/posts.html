@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Posts - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="posts-page">
+    <div class="page-header">
+        <h2>
+            {% if post_type == 'ask_hn' %}
+                Ask HN Posts
+            {% elif post_type == 'show_hn' %}
+                Show HN Posts
+            {% elif post_type == 'new' %}
+                New Stories
+            {% else %}
+                All Posts
+            {% endif %}
+        </h2>
+
+        <!-- Filter -->
+        <div class="filter-buttons">
+            <a href="/posts" class="btn {% if not post_type %}btn-active{% endif %}">All</a>
+            <a href="/posts?type=ask_hn" class="btn {% if post_type == 'ask_hn' %}btn-active{% endif %}">Ask HN</a>
+            <a href="/posts?type=show_hn" class="btn {% if post_type == 'show_hn' %}btn-active{% endif %}">Show HN</a>
+            <a href="/posts?type=new" class="btn {% if post_type == 'new' %}btn-active{% endif %}">New</a>
+        </div>
+    </div>
+
+    <!-- Posts List -->
+    {% if posts %}
+    <div class="posts-list">
+        {% for post in posts %}
+        <div class="post-card">
+            <div class="post-header">
+                <span class="badge badge-{{ post.post_type }}">{{ post.post_type }}</span>
+                <span class="post-score">{{ post.score }} points</span>
+                <span class="post-time">{{ time_ago(post.created_at) }}</span>
+            </div>
+
+            <h3 class="post-title">
+                {% if post.url %}
+                    <a href="{{ post.url }}" target="_blank">{{ post.title }}</a>
+                {% else %}
+                    {{ post.title }}
+                {% endif %}
+            </h3>
+
+            {% if post.text %}
+            <div class="post-text">
+                {{ truncate_text(clean_html(post.text), 300) }}
+            </div>
+            {% endif %}
+
+            <div class="post-meta">
+                <span>by {{ post.author }}</span>
+                <span>{{ post.comments_count }} comments</span>
+                <a href="https://news.ycombinator.com/item?id={{ post.hn_id }}" target="_blank" class="external-link">
+                    View on HN ↗
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state card">
+        <p>No posts found. Start the parser to collect data.</p>
+        <a href="/" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

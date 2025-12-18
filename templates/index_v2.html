@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+
+{% block title %}Панель управления - News Insight Parser v2{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>Панель управления</h2>
+
+    <!-- Parser Controls -->
+    <div class="card">
+        <h3>Управление парсером</h3>
+        <div class="parser-control">
+            <button id="start-parser" onclick="startParser()" class="btn btn-primary">
+                Запустить парсинг
+            </button>
+            <button id="analyze-signals" onclick="analyzeSignals()" class="btn" style="background: #9b59b6; color: white;">
+                Анализировать сигналы
+            </button>
+            <button id="cleanup-old" onclick="cleanupOldPosts()" class="btn" style="background: #e67e22; color: white;">
+                Очистить старые посты
+            </button>
+            <button id="ai-analyze" onclick="aiAnalyzeBatch()" class="btn" style="background: #1abc9c; color: white;">
+                🤖 AI Анализ постов
+            </button>
+            <div id="parser-status" class="status">
+                {% if parser_status.is_running %}
+                    <span class="status-running">Работает: {{ parser_status.current_section }}</span>
+                {% else %}
+                    <span class="status-idle">Ожидание</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if parser_status.last_run %}
+        <p class="small">Последний запуск: {{ time_ago(parser_status.last_run) }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Scheduler Controls -->
+    <div class="card">
+        <h3>Автоматический парсинг</h3>
+        <div class="parser-control">
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <button id="enable-scheduler" onclick="enableScheduler()" class="btn" style="background: #27ae60; color: white;">
+                    Включить всё
+                </button>
+                <button id="disable-scheduler" onclick="disableScheduler()" class="btn" style="background: #e74c3c; color: white;">
+                    Отключить всё
+                </button>
+            </div>
+            <div id="scheduler-status" class="status">
+                <span class="status-idle">Загрузка...</span>
+            </div>
+        </div>
+
+        <!-- Sources List -->
+        <div id="sources-list" style="margin-top: 20px;">
+            <h4 style="margin-bottom: 10px;">Источники данных:</h4>
+            <div id="sources-container">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Active Jobs -->
+        <div id="active-jobs" style="margin-top: 20px; display: none;">
+            <h4 style="margin-bottom: 10px;">Активные задачи:</h4>
+            <div id="jobs-container" style="font-size: 14px;">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_posts }}</div>
+            <div class="stat-label">Всего постов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.ask_posts }}</div>
+            <div class="stat-label">Ask HN</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.show_posts }}</div>
+            <div class="stat-label">Show HN</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.new_posts }}</div>
+            <div class="stat-label">Новые</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_comments }}</div>
+            <div class="stat-label">Комментарии</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_signals }}</div>
+            <div class="stat-label">Сигналы</div>
+        </div>
+        <div class="stat-card" style="background: #fff3cd;">
+            <div class="stat-number" style="color: #856404;">{{ stats.critical_signals }}</div>
+            <div class="stat-label">🔴 Critical</div>
+        </div>
+        <div class="stat-card" style="background: #cfe2ff;">
+            <div class="stat-number" style="color: #084298;">{{ stats.trending_signals }}</div>
+            <div class="stat-label">🔥 Trending</div>
+        </div>
+    </div>
+
+    <!-- Recent Parser Runs -->
+    <div class="card">
+        <h3>История запусков парсера</h3>
+        {% if recent_runs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Источник</th>
+                    <th>Раздел</th>
+                    <th>Собрано</th>
+                    <th>Статус</th>
+                    <th>Время</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                <tr>
+                    <td>{{ run.source }}</td>
+                    <td>{{ run.section }}</td>
+                    <td>{{ run.items_fetched }}</td>
+                    <td>
+                        {% if run.status == 'success' %}
+                            <span class="badge badge-{{ run.status }}">Успешно</span>
+                        {% elif run.status == 'running' %}
+                            <span class="badge badge-{{ run.status }}">Выполняется</span>
+                        {% else %}
+                            <span class="badge badge-{{ run.status }}">{{ run.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ time_ago(run.started_at) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Парсер ещё не запускался. Нажмите "Запустить парсинг" чтобы начать.</p>
+        {% endif %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="quick-links">
+        <a href="/posts?type=ask_hn" class="link-card">
+            <h4>📝 Ask HN</h4>
+            <p>Вопросы и обсуждения от основателей</p>
+        </a>
+        <a href="/posts?type=show_hn" class="link-card">
+            <h4>🚀 Show HN</h4>
+            <p>Новые запуски и ранние фидбэки</p>
+        </a>
+        <a href="/signals?priority=critical" class="link-card">
+            <h4>🔴 Critical Signals</h4>
+            <p>Критически важные сигналы</p>
+        </a>
+        <a href="/signals?trending=true" class="link-card">
+            <h4>🔥 Trending</h4>
+            <p>Горячие тренды</p>
+        </a>
+    </div>
+</div>
+
+<script>
+async function startParser() {
+    const btn = document.getElementById('start-parser');
+    btn.disabled = true;
+    btn.textContent = 'Запускаю...';
+
+    try {
+        const response = await fetch('/api/parse', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({limit: 20})
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Парсер успешно запущен! Процесс займёт ~2-3 минуты.');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Ошибка: ' + data.message);
+            btn.disabled = false;
+            btn.textContent = 'Запустить парсинг';
+        }
+    } catch (error) {
+        alert('Ошибка запуска парсера: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Запустить парсинг';
+    }
+}
+
+async function analyzeSignals() {
+    const btn = document.getElementById('analyze-signals');
+    btn.disabled = true;
+    btn.textContent = 'Анализирую...';
+
+    try {
+        const response = await fetch('/api/analyze-signals', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({lookback_days: 7, min_mentions: 3})
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Анализ сигналов запущен! Займёт ~30 секунд.');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Анализировать сигналы';
+    }
+}
+
+async function cleanupOldPosts() {
+    if (!confirm('Удалить все посты старше 2 месяцев?\nЭто действие необратимо!')) {
+        return;
+    }
+
+    const btn = document.getElementById('cleanup-old');
+    btn.disabled = true;
+    btn.textContent = 'Удаляю...';
+
+    try {
+        const response = await fetch('/api/cleanup-old-posts', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(`Успешно удалено ${data.deleted_count} постов!`);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Очистить старые посты';
+    }
+}
+
+async function aiAnalyzeBatch() {
+    const btn = document.getElementById('ai-analyze');
+    btn.disabled = true;
+    btn.textContent = 'Анализирую...';
+
+    try {
+        const response = await fetch('/api/ai-analyze-batch', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({limit: 20})
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(`${data.message}\nЭто займет ~2-3 минуты.`);
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🤖 AI Анализ постов';
+    }
+}
+
+async function enableScheduler() {
+    const btn = document.getElementById('enable-scheduler');
+    btn.disabled = true;
+    btn.textContent = 'Включаю...';
+
+    try {
+        const response = await fetch('/api/scheduler/enable', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(data.message);
+            updateSchedulerStatus();
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Включить всё';
+    }
+}
+
+async function disableScheduler() {
+    const btn = document.getElementById('disable-scheduler');
+    btn.disabled = true;
+    btn.textContent = 'Отключаю...';
+
+    try {
+        const response = await fetch('/api/scheduler/disable', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(data.message);
+            updateSchedulerStatus();
+        } else {
+            alert('Ошибка: ' + data.message);
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Отключить всё';
+    }
+}
+
+async function toggleSource(sourceName, enabled) {
+    const endpoint = enabled ? 'enable' : 'disable';
+
+    try {
+        const response = await fetch(`/api/scheduler/source/${sourceName}/${endpoint}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            updateSchedulerStatus();
+        } else {
+            alert('Ошибка: ' + data.message);
+            // Revert checkbox
+            updateSchedulerStatus();
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+        updateSchedulerStatus();
+    }
+}
+
+async function updateSchedulerStatus() {
+    try {
+        const response = await fetch('/api/scheduler/status');
+        const status = await response.json();
+
+        // Update main status
+        const statusDiv = document.getElementById('scheduler-status');
+        if (status.auto_parse_enabled) {
+            statusDiv.innerHTML = `<span class="status-running">Включен | Задач: ${status.jobs.length}</span>`;
+        } else {
+            statusDiv.innerHTML = '<span class="status-idle">Отключен</span>';
+        }
+
+        // Update sources list
+        const sourcesContainer = document.getElementById('sources-container');
+        if (status.sources && Object.keys(status.sources).length > 0) {
+            let sourcesHTML = '';
+
+            for (const [sourceName, sourceData] of Object.entries(status.sources)) {
+                const enabled = sourceData.enabled;
+                const schedule = sourceData.schedule;
+                const lastParse = sourceData.last_parse;
+
+                // Get source display name
+                const displayName = schedule.name || sourceName;
+
+                sourcesHTML += `
+                    <div style="margin: 10px 0; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox"
+                                   ${enabled ? 'checked' : ''}
+                                   onchange="toggleSource('${sourceName}', this.checked)"
+                                   style="margin-right: 10px;">
+                            <strong>${displayName}</strong>
+                        </label>
+                        <div style="margin-left: 30px; margin-top: 5px; font-size: 13px; color: #666;">
+                `;
+
+                // Show sections with intervals
+                if (schedule.sections) {
+                    for (const [sectionName, sectionConfig] of Object.entries(schedule.sections)) {
+                        sourcesHTML += `
+                            <div>• ${sectionName}: каждые ${sectionConfig.interval_hours} ч. (до ${sectionConfig.limit} постов)</div>
+                        `;
+                    }
+                } else if (schedule.cron) {
+                    sourcesHTML += `<div>• Расписание: ${schedule.cron}</div>`;
+                }
+
+                if (lastParse) {
+                    const lastParseDate = new Date(lastParse);
+                    sourcesHTML += `<div style="margin-top: 5px; color: #999;">Последний парсинг: ${lastParseDate.toLocaleString('ru-RU')}</div>`;
+                }
+
+                sourcesHTML += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            sourcesContainer.innerHTML = sourcesHTML;
+        } else {
+            sourcesContainer.innerHTML = '<p style="color: #999;">Нет доступных источников</p>';
+        }
+
+        // Update active jobs
+        const jobsDiv = document.getElementById('active-jobs');
+        const jobsContainer = document.getElementById('jobs-container');
+
+        if (status.jobs && status.jobs.length > 0) {
+            jobsDiv.style.display = 'block';
+            let jobsHTML = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+            for (const job of status.jobs) {
+                const nextRun = job.next_run ? new Date(job.next_run) : null;
+                const timeUntil = nextRun ? getTimeUntil(nextRun) : 'Неизвестно';
+
+                jobsHTML += `
+                    <div style="padding: 8px; background: #f5f5f5; border-radius: 4px;">
+                        <strong>${job.name}</strong>
+                        <div style="color: #666; font-size: 12px;">Следующий запуск через ${timeUntil}</div>
+                    </div>
+                `;
+            }
+
+            jobsHTML += '</div>';
+            jobsContainer.innerHTML = jobsHTML;
+        } else {
+            jobsDiv.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to update scheduler status:', error);
+    }
+}
+
+function getTimeUntil(targetDate) {
+    const now = new Date();
+    const diff = targetDate - now;
+
+    if (diff < 0) return 'скоро';
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (hours > 0) {
+        return `${hours}ч ${minutes}м`;
+    } else {
+        return `${minutes}м`;
+    }
+}
+
+// Update scheduler status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateSchedulerStatus();
+    // Update status every 30 seconds
+    setInterval(updateSchedulerStatus, 30000);
+});
+</script>
+{% endblock %}

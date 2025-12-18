@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Signals - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="signals-page">
+    <h2>Detected Signals & Insights</h2>
+
+    <div class="info-box">
+        <h4>What are signals?</h4>
+        <p>Signals are patterns and insights automatically detected from parsed content:</p>
+        <ul>
+            <li><strong>Repeating Pains:</strong> Common problems mentioned by founders</li>
+            <li><strong>Emerging Language:</strong> New terms and phrases gaining traction</li>
+            <li><strong>Solution Patterns:</strong> Similar approaches to solving problems</li>
+            <li><strong>Behavioral Changes:</strong> Shifts in decision-making patterns</li>
+        </ul>
+    </div>
+
+    {% if signals %}
+    <div class="signals-list">
+        {% for signal in signals %}
+        <div class="signal-card signal-{{ signal.signal_type }}">
+            <div class="signal-header">
+                <span class="badge badge-{{ signal.signal_type }}">{{ signal.signal_type }}</span>
+                <span class="signal-frequency">Frequency: {{ signal.frequency }}</span>
+            </div>
+
+            <h3>{{ signal.title }}</h3>
+            <p class="signal-description">{{ signal.description }}</p>
+
+            <div class="signal-meta">
+                <span>Source: {{ signal.source }}</span>
+                <span>First seen: {{ time_ago(signal.first_seen) }}</span>
+                <span>Last seen: {{ time_ago(signal.last_seen) }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state card">
+        <p>No signals detected yet. Signals will appear after parsing and analyzing content.</p>
+        <a href="/" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

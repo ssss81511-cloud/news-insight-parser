@@ -1,0 +1,35 @@
+{
+  "enabled": false,
+  "parse_interval_hours": 2,
+  "analyze_after_parse": true,
+  "parse_enabled": false,
+  "analyze_enabled": false,
+  "last_parse": null,
+  "last_analyze": null,
+  "analyze_interval_hours": 24,
+  "auto_parse_enabled": true,
+  "sources": {
+    "hacker_news": {
+      "enabled": true,
+      "last_parse": "2025-12-18T12:36:59.118700"
+    },
+    "reddit": {
+      "enabled": true,
+      "last_parse": "2025-12-18T12:36:59.118198"
+    },
+    "devto": {
+      "enabled": true,
+      "last_parse": "2025-12-18T12:36:59.121702"
+    },
+    "product_hunt": {
+      "enabled": true
+    },
+    "vc_blogs": {
+      "enabled": true
+    },
+    "techcrunch": {
+      "enabled": true,
+      "last_parse": "2025-12-18T12:36:59.122205"
+    }
+  }
+}

@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Панель управления - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>Панель управления</h2>
+
+    <!-- Информация о работе парсера -->
+    <div class="card info-card">
+        <h3>ℹ️ Как работает парсер</h3>
+        <ul class="info-list">
+            <li><strong>Ask HN:</strong> Собирает вопросы и проблемы от основателей стартапов</li>
+            <li><strong>Show HN:</strong> Новые запуски продуктов и запросы на фидбэк</li>
+            <li><strong>New:</strong> Самые свежие истории с Hacker News</li>
+        </ul>
+        <p class="small"><strong>Время парсинга:</strong> ~2-3 минуты (собирает ~60 постов + комментарии)</p>
+        <p class="small"><strong>Данные хранятся:</strong> <code>data/insights.db</code> (постоянно накапливаются)</p>
+    </div>
+
+    <!-- Parser Controls -->
+    <div class="card">
+        <h3>Управление парсером</h3>
+        <div class="parser-control">
+            <button id="start-parser" onclick="startParser()" class="btn btn-primary">
+                Запустить парсинг
+            </button>
+            <div id="parser-status" class="status">
+                {% if parser_status.is_running %}
+                    <span class="status-running">Работает: {{ parser_status.current_section }}</span>
+                {% else %}
+                    <span class="status-idle">Ожидание</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if parser_status.last_run %}
+        <p class="small">Последний запуск: {{ time_ago(parser_status.last_run) }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_posts }}</div>
+            <div class="stat-label">Всего постов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.ask_hn_count }}</div>
+            <div class="stat-label">Ask HN</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.show_hn_count }}</div>
+            <div class="stat-label">Show HN</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.new_count }}</div>
+            <div class="stat-label">Новые</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_comments }}</div>
+            <div class="stat-label">Комментарии</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_signals }}</div>
+            <div class="stat-label">Сигналы</div>
+        </div>
+    </div>
+
+    <!-- Recent Parser Runs -->
+    <div class="card">
+        <h3>История запусков парсера</h3>
+        {% if recent_runs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Источник</th>
+                    <th>Раздел</th>
+                    <th>Собрано</th>
+                    <th>Статус</th>
+                    <th>Время</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                <tr>
+                    <td>{{ run.source }}</td>
+                    <td>{{ run.section }}</td>
+                    <td>{{ run.items_fetched }}</td>
+                    <td>
+                        {% if run.status == 'success' %}
+                            <span class="badge badge-{{ run.status }}">Успешно</span>
+                        {% elif run.status == 'running' %}
+                            <span class="badge badge-{{ run.status }}">Выполняется</span>
+                        {% else %}
+                            <span class="badge badge-{{ run.status }}">{{ run.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ time_ago(run.started_at) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Парсер ещё не запускался. Нажмите "Запустить парсинг" чтобы начать.</p>
+        {% endif %}
+    </div>
+
+    <!-- Quick Links -->
+    <div class="quick-links">
+        <a href="/posts?type=ask_hn" class="link-card">
+            <h4>📝 Ask HN</h4>
+            <p>Вопросы и обсуждения от основателей</p>
+        </a>
+        <a href="/posts?type=show_hn" class="link-card">
+            <h4>🚀 Show HN</h4>
+            <p>Новые запуски и ранние фидбэки</p>
+        </a>
+        <a href="/signals" class="link-card">
+            <h4>🎯 Сигналы</h4>
+            <p>Обнаруженные паттерны и инсайты</p>
+        </a>
+    </div>
+</div>
+
+<script>
+async function startParser() {
+    const btn = document.getElementById('start-parser');
+    btn.disabled = true;
+    btn.textContent = 'Запускаю...';
+
+    try {
+        const response = await fetch('/api/parse', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Парсер успешно запущен! Процесс займёт ~2-3 минуты.');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Ошибка: ' + data.message);
+            btn.disabled = false;
+            btn.textContent = 'Запустить парсинг';
+        }
+    } catch (error) {
+        alert('Ошибка запуска парсера: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Запустить парсинг';
+    }
+}
+</script>
+{% endblock %}

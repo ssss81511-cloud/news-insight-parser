@@ -1,0 +1,438 @@
+"""
+Flask web interface for News Insight Parser - Version 2
+Uses UniversalPost and ParserOrchestrator
+"""
+from flask import Flask, render_template, jsonify, request
+from storage.universal_database import UniversalDatabaseManager
+from parsers.orchestrator import create_orchestrator
+from analyzers.enhanced_signal_detector import EnhancedSignalDetector
+from analyzers.insights_analyzer import InsightsAnalyzer
+from analyzers.ai_analyzer import AIAnalyzer
+from utils.helpers import time_ago, truncate_text, clean_html
+from utils.scheduler import get_scheduler
+from datetime import datetime, timezone
+import threading
+import os
+import json
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+
+# Add custom Jinja2 filter for JSON parsing
+@app.template_filter('fromjson')
+def fromjson_filter(value):
+    """Parse JSON string in templates"""
+    if not value:
+        return []
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+# Initialize database with universal models
+db = UniversalDatabaseManager()
+
+# Create orchestrator with parsers
+orchestrator = create_orchestrator(db)
+
+# Signal detector
+signal_detector = EnhancedSignalDetector(db)
+
+# Insights analyzer
+insights_analyzer = InsightsAnalyzer(db)
+
+# AI analyzer (Groq)
+GROQ_API_KEY = os.getenv('GROQ_API_KEY', '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')
+ai_analyzer = AIAnalyzer(api_key=GROQ_API_KEY)
+
+# Scheduler for automatic parsing
+scheduler = get_scheduler()
+
+# Set up scheduler with orchestrator and analyze callback
+scheduler.set_orchestrator(orchestrator)
+scheduler.set_analyze_callback(
+    lambda: signal_detector.detect_all_signals(lookback_days=7, min_mentions=3)
+)
+
+# Parser status
+parser_status = {
+    'is_running': False,
+    'last_run': None,
+    'current_section': None
+}
+
+
+@app.route('/')
+def index():
+    """Main dashboard page"""
+    stats = db.get_stats()
+    recent_runs = db.get_parser_runs(limit=5)
+
+    return render_template('index_v2.html',
+                          stats=stats,
+                          recent_runs=recent_runs,
+                          parser_status=parser_status,
+                          time_ago=time_ago)
+
+
+@app.route('/posts')
+def posts():
+    """View all posts"""
+    post_type = request.args.get('type', None)
+    source = request.args.get('source', None)
+    min_importance = float(request.args.get('min_importance', 0))
+    search_query = request.args.get('q', None)
+
+    posts = db.get_recent_posts(
+        limit=100,
+        post_type=post_type,
+        source=source,
+        min_importance=min_importance,
+        search_query=search_query
+    )
+
+    return render_template('posts_v2.html',
+                          posts=posts,
+                          post_type=post_type,
+                          source=source,
+                          search_query=search_query,
+                          time_ago=time_ago,
+                          truncate_text=truncate_text,
+                          clean_html=clean_html)
+
+
+@app.route('/post/<int:post_id>')
+def post_detail(post_id):
+    """Detailed view of a single post"""
+    post = db.get_post_by_id(post_id)
+
+    if not post:
+        return "Post not found", 404
+
+    # Get comments
+    comments = db.get_post_comments(post_id)
+
+    # Get related posts (from same cluster)
+    related_posts = db.find_duplicate_posts(post)
+
+    return render_template('post_detail.html',
+                          post=post,
+                          comments=comments,
+                          related_posts=related_posts,
+                          time_ago=time_ago,
+                          clean_html=clean_html)
+
+
+@app.route('/signals')
+def signals():
+    """View detected signals"""
+    priority = request.args.get('priority', None)
+    trending_only = request.args.get('trending', 'false').lower() == 'true'
+
+    signals = db.get_prioritized_signals(
+        limit=50,
+        priority=priority,
+        only_trending=trending_only
+    )
+
+    # Also get cross-source signals
+    cross_source_signals = db.get_cross_source_signals()
+
+    return render_template('signals_v2.html',
+                          signals=signals,
+                          cross_source_signals=cross_source_signals,
+                          time_ago=time_ago)
+
+
+@app.route('/analytics')
+def analytics():
+    """Advanced analytics dashboard"""
+    lookback_days = int(request.args.get('days', 7))
+
+    # Get all analytics data
+    top_posts = insights_analyzer.get_top_posts(lookback_days=lookback_days, top_n=20)
+    topics = insights_analyzer.detect_topics(lookback_days=lookback_days)
+    clusters = insights_analyzer.cluster_similar_posts(lookback_days=lookback_days)
+    trends = insights_analyzer.detect_trends(lookback_days=lookback_days * 2)
+    source_dist = insights_analyzer.get_source_distribution(lookback_days=lookback_days)
+
+    return render_template('analytics.html',
+                          top_posts=top_posts,
+                          topics=topics,
+                          clusters=clusters,
+                          trends=trends,
+                          source_dist=source_dist,
+                          lookback_days=lookback_days)
+
+
+@app.route('/api/parse', methods=['POST'])
+def start_parsing():
+    """Start parsing all sources"""
+    if parser_status['is_running']:
+        return jsonify({'status': 'error', 'message': 'Парсер уже запущен'}), 400
+
+    # Get parameters
+    data = request.get_json() or {}
+    sources = data.get('sources', None)  # None = all sources
+    limit = data.get('limit', 20)
+
+    # Run parser in background thread
+    thread = threading.Thread(target=run_parser, args=(sources, limit))
+    thread.start()
+
+    return jsonify({'status': 'success', 'message': 'Парсер запущен'})
+
+
+@app.route('/api/analyze-signals', methods=['POST'])
+def analyze_signals():
+    """Run signal detection"""
+    data = request.get_json() or {}
+    lookback_days = data.get('lookback_days', 7)
+    min_mentions = data.get('min_mentions', 3)
+
+    try:
+        # Run in background
+        thread = threading.Thread(
+            target=signal_detector.detect_all_signals,
+            args=(lookback_days, min_mentions)
+        )
+        thread.start()
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Анализ сигналов запущен (последние {lookback_days} дней)'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/status')
+def get_status():
+    """Get current parser status"""
+    stats = db.get_stats()
+    orch_status = orchestrator.get_status()
+    scheduler_status = scheduler.get_status()
+
+    return jsonify({
+        'parser_status': parser_status,
+        'orchestrator_status': orch_status,
+        'scheduler_status': scheduler_status,
+        'stats': stats
+    })
+
+
+@app.route('/api/scheduler/enable', methods=['POST'])
+def enable_scheduler():
+    """Enable automatic parsing for all sources"""
+    data = request.get_json() or {}
+    source_states = data.get('sources', None)  # Optional: {source_name: enabled}
+
+    try:
+        scheduler.enable_all(source_states=source_states)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Автоматический парсинг включен'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/scheduler/disable', methods=['POST'])
+def disable_scheduler():
+    """Disable automatic parsing"""
+    try:
+        scheduler.disable_all()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Автоматический парсинг отключен'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/scheduler/source/<source_name>/enable', methods=['POST'])
+def enable_source(source_name):
+    """Enable automatic parsing for a specific source"""
+    try:
+        scheduler.enable_source(source_name)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Источник {source_name} включен'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/scheduler/source/<source_name>/disable', methods=['POST'])
+def disable_source(source_name):
+    """Disable automatic parsing for a specific source"""
+    try:
+        scheduler.disable_source(source_name)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Источник {source_name} отключен'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/scheduler/status')
+def get_scheduler_status():
+    """Get scheduler status"""
+    return jsonify(scheduler.get_status())
+
+
+@app.route('/api/cleanup-old-posts', methods=['POST'])
+def cleanup_old_posts():
+    """Delete posts older than 2 months"""
+    try:
+        deleted_count = db.cleanup_old_posts(days_old=60)
+        return jsonify({
+            'status': 'success',
+            'message': f'Удалено {deleted_count} старых постов',
+            'deleted_count': deleted_count
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/ai-analyze-post/<int:post_id>', methods=['POST'])
+def ai_analyze_post(post_id):
+    """AI analyze a single post"""
+    try:
+        post = db.get_post_by_id(post_id)
+        if not post:
+            return jsonify({'status': 'error', 'message': 'Post not found'}), 404
+
+        # Run AI analysis
+        analysis = ai_analyzer.analyze_post(post.title, post.content or '')
+
+        # Save results
+        db.save_ai_analysis(post_id, analysis)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'AI анализ завершен',
+            'analysis': analysis
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/ai-analyze-batch', methods=['POST'])
+def ai_analyze_batch():
+    """AI analyze top posts without AI analysis"""
+    try:
+        data = request.get_json() or {}
+        limit = data.get('limit', 20)
+
+        # Get posts without AI analysis
+        from storage.universal_models import UniversalPost
+
+        posts = db.session.query(UniversalPost).filter(
+            UniversalPost.ai_summary == None
+        ).order_by(
+            UniversalPost.importance_score.desc()
+        ).limit(limit).all()
+
+        if not posts:
+            return jsonify({
+                'status': 'success',
+                'message': 'Все посты уже проанализированы',
+                'analyzed_count': 0
+            })
+
+        # Analyze in background
+        def analyze_posts():
+            analyzed = 0
+            for post in posts:
+                try:
+                    analysis = ai_analyzer.analyze_post(post.title, post.content or '')
+                    db.save_ai_analysis(post.id, analysis)
+                    analyzed += 1
+                except Exception as e:
+                    print(f"Error analyzing post {post.id}: {e}")
+            print(f"Batch analysis complete: {analyzed} posts analyzed")
+
+        thread = threading.Thread(target=analyze_posts)
+        thread.start()
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Запущен анализ {len(posts)} постов (фоновая задача)',
+            'posts_to_analyze': len(posts)
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+def run_parser(sources=None, limit=20):
+    """Background task to run the parser"""
+    parser_status['is_running'] = True
+    parser_status['last_run'] = datetime.now(timezone.utc)
+
+    try:
+        if sources:
+            # Parse specific sources
+            for source in sources:
+                parser_status['current_section'] = f"{source}"
+                orchestrator.parse_source(source, limit_per_section=limit)
+        else:
+            # Parse all sources
+            parser_status['current_section'] = 'Все источники'
+            orchestrator.parse_all(limit_per_section=limit)
+
+    except Exception as e:
+        print(f"Parser error: {e}")
+        parser_status['current_section'] = f"Ошибка: {str(e)}"
+
+    finally:
+        parser_status['is_running'] = False
+        parser_status['current_section'] = None
+
+
+@app.template_filter('time_ago')
+def time_ago_filter(dt):
+    """Template filter for time ago"""
+    return time_ago(dt)
+
+
+if __name__ == '__main__':
+    # Create data directory if it doesn't exist
+    os.makedirs('data', exist_ok=True)
+
+    # Initialize database
+    db.engine
+
+    # Start scheduler
+    scheduler.start()
+
+    print("=" * 50)
+    print("News Insight Parser - Version 2.0")
+    print("=" * 50)
+    print("[OK] Universal architecture")
+    print("[OK] Multi-source support")
+    print("[OK] Signal prioritization")
+    print("[OK] Automatic scheduler")
+    print("=" * 50)
+    print(f"Registered sources: {', '.join(orchestrator.get_registered_sources())}")
+    print("=" * 50)
+
+    # Show scheduler status
+    sched_status = scheduler.get_status()
+    if sched_status.get('auto_parse_enabled', False):
+        enabled_sources = [name for name, data in sched_status.get('sources', {}).items()
+                          if data.get('enabled', False)]
+        print(f"[SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}")
+    else:
+        print("[SCHEDULER] Auto-parse: OFF")
+
+    print("=" * 50)
+    print("Starting server on http://localhost:5001")
+    print("=" * 50)
+
+    app.run(debug=True, host='0.0.0.0', port=5001)  # Use port 5001 to not conflict

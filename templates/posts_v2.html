@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Посты - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="posts-page">
+    <div class="page-header">
+        <h2>
+            {% if source %}
+                {% if source == 'hacker_news' %}
+                    Hacker News
+                {% elif source == 'reddit' %}
+                    Reddit
+                {% elif source == 'product_hunt' %}
+                    Product Hunt
+                {% elif source == 'devto' %}
+                    Dev.to
+                {% elif source == 'vc_blogs' %}
+                    VC Blogs
+                {% elif source == 'techcrunch' %}
+                    TechCrunch
+                {% endif %}
+            {% else %}
+                Все источники
+            {% endif %}
+        </h2>
+
+        <!-- Search Bar -->
+        <div class="search-section" style="margin-bottom: 20px;">
+            <form method="GET" action="/posts" style="display: flex; gap: 10px; align-items: center;">
+                <input type="text"
+                       name="q"
+                       value="{{ search_query or '' }}"
+                       placeholder="🔍 Поиск по заголовку и содержимому..."
+                       style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                {% if source %}
+                <input type="hidden" name="source" value="{{ source }}">
+                {% endif %}
+                <button type="submit" class="btn btn-primary">Искать</button>
+                {% if search_query %}
+                <a href="/posts{% if source %}?source={{ source }}{% endif %}" class="btn" style="background: #95a5a6; color: white;">Сбросить</a>
+                {% endif %}
+            </form>
+            {% if search_query %}
+            <p style="margin-top: 10px; color: #7f8c8d; font-size: 14px;">
+                Найдено постов: {{ posts|length }} по запросу "<strong>{{ search_query }}</strong>"
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Source Filter -->
+        <div class="filter-section">
+            <div class="filter-buttons">
+                <a href="/posts{% if search_query %}?q={{ search_query }}{% endif %}" class="btn {% if not source %}btn-active{% endif %}">Все</a>
+                <a href="/posts?source=hacker_news{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'hacker_news' %}btn-active{% endif %}">Hacker News</a>
+                <a href="/posts?source=reddit{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'reddit' %}btn-active{% endif %}">Reddit</a>
+                <a href="/posts?source=product_hunt{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'product_hunt' %}btn-active{% endif %}">Product Hunt</a>
+                <a href="/posts?source=devto{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'devto' %}btn-active{% endif %}">Dev.to</a>
+                <a href="/posts?source=vc_blogs{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'vc_blogs' %}btn-active{% endif %}">VC Blogs</a>
+                <a href="/posts?source=techcrunch{% if search_query %}&q={{ search_query }}{% endif %}" class="btn {% if source == 'techcrunch' %}btn-active{% endif %}">TechCrunch</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Posts List -->
+    {% if posts %}
+    <div class="posts-list">
+        {% for post in posts %}
+        <div class="post-card">
+            <div class="post-header">
+                <span class="badge" style="background: #3498db; color: white;">
+                    {% if post.source == 'hacker_news' %}HN
+                    {% elif post.source == 'reddit' %}Reddit
+                    {% elif post.source == 'product_hunt' %}PH
+                    {% elif post.source == 'devto' %}Dev.to
+                    {% elif post.source == 'vc_blogs' %}VC
+                    {% elif post.source == 'techcrunch' %}TC
+                    {% endif %}
+                </span>
+                <span class="post-score">{{ post.score }} points</span>
+                {% if post.importance_score > 50 %}
+                <span class="badge" style="background: #f39c12; color: white;">
+                    ⭐ {{ post.importance_score|int }}/100
+                </span>
+                {% endif %}
+                <span class="post-time">{{ time_ago(post.created_at) }}</span>
+            </div>
+
+            <h3 class="post-title">
+                <a href="/post/{{ post.id }}" class="post-link">
+                    {{ post.title }}
+                </a>
+            </h3>
+            {% if post.source_url %}
+            <div style="margin-top: 8px;">
+                <a href="{{ post.source_url }}" target="_blank" style="color: #3498db; font-size: 14px; text-decoration: none;">
+                    🔗 Открыть оригинал →
+                </a>
+            </div>
+            {% endif %}
+
+            {% if post.content %}
+            <div class="post-text">
+                {{ truncate_text(clean_html(post.content), 300) }}
+            </div>
+            {% endif %}
+
+            <div class="post-meta">
+                <span>by {{ post.author }}</span>
+                <span>{{ post.comments_count }} comments</span>
+                {% if post.duplicate_group_id %}
+                <span style="color: #e74c3c;">🔗 Дубликат</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state card">
+        <p>Постов не найдено. Запустите парсер для сбора данных.</p>
+        <a href="/" class="btn btn-primary">Перейти на панель управления</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.post-link {
+    color: #2c3e50;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.post-link:hover {
+    color: #3498db;
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

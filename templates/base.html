@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}News Insight Parser{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">📰 News Insight Parser</h1>
+            <ul class="nav-links">
+                <li><a href="/" class="{% if request.endpoint == 'index' %}active{% endif %}">Панель</a></li>
+                <li><a href="/posts" class="{% if request.endpoint == 'posts' %}active{% endif %}">Посты</a></li>
+                <li><a href="/signals" class="{% if request.endpoint == 'signals' %}active{% endif %}">Сигналы</a></li>
+                <li><a href="/analytics" class="{% if request.endpoint == 'analytics' %}active{% endif %}">Аналитика</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 News Insight Parser | Monitoring: Hacker News (Ask HN, Show HN, New)</p>
+        </div>
+    </footer>
+
+    <script>
+        // Auto-refresh status every 10 seconds
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                updateStatus(data);
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }, 10000);
+
+        function updateStatus(data) {
+            const statusEl = document.getElementById('parser-status');
+            if (statusEl && data.parser_status) {
+                if (data.parser_status.is_running) {
+                    statusEl.innerHTML = `<span class="status-running">Running: ${data.parser_status.current_section || 'Processing...'}</span>`;
+                } else {
+                    statusEl.innerHTML = '<span class="status-idle">Idle</span>';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
