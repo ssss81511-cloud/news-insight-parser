@@ -83,27 +83,98 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, unsplash_key: Optional[str] = None):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
-            use_ai: Use professional photos from Unsplash (free, high quality)
-            unsplash_key: Unsplash API key (optional - get free at https://unsplash.com/developers)
+            use_ai: Use professional photos from Pexels
+            pexels_key: Pexels API key (get free at https://www.pexels.com/api/)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
 
         self.output_dir = output_dir
         self.use_ai = use_ai
-        self.unsplash_key = unsplash_key
+        self.pexels_key = pexels_key
         os.makedirs(output_dir, exist_ok=True)
 
-        # Unsplash API for professional stock photos (FREE, better than AI!)
-        self.unsplash_api_url = "https://api.unsplash.com/photos/random"
+        # Pexels API for professional stock photos (FREE with API key)
+        self.pexels_api_url = "https://api.pexels.com/v1/search"
 
-        print(f"[REEL GENERATOR] Initialized: Photos={use_ai}, Unsplash={'✅' if unsplash_key else '❌ (using fallback)'}", flush=True)
+        if use_ai and not pexels_key:
+            print(f"[REEL GENERATOR] ⚠️  WARNING: No Pexels API key!", flush=True)
+            print(f"[REEL GENERATOR] ⚠️  Get free key: https://www.pexels.com/api/", flush=True)
+            print(f"[REEL GENERATOR] ⚠️  Will use gradient fallback", flush=True)
+
+        print(f"[REEL GENERATOR] Initialized: Photos={use_ai}, Pexels={'✅' if pexels_key else '❌ (gradient fallback)'}", flush=True)
+
+    def _fetch_pexels_photo(self, keywords: List[str]) -> Optional[Image.Image]:
+        """
+        Fetch professional photo from Pexels
+
+        Args:
+            keywords: Keywords for search
+
+        Returns:
+            PIL Image or None if failed
+        """
+        if not self.pexels_key:
+            print(f"[PEXELS] No API key - skipping photo fetch", flush=True)
+            return None
+
+        # Build search query
+        query = ' '.join(keywords[:3]) if keywords else 'technology business'
+        print(f"[PEXELS] Searching: {query}", flush=True)
+
+        try:
+            headers = {
+                'Authorization': self.pexels_key
+            }
+
+            params = {
+                'query': query,
+                'orientation': 'portrait',
+                'size': 'large',
+                'per_page': 1
+            }
+
+            response = requests.get(
+                self.pexels_api_url,
+                headers=headers,
+                params=params,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+
+                if data.get('photos') and len(data['photos']) > 0:
+                    photo = data['photos'][0]
+                    # Get large photo URL
+                    photo_url = photo['src']['large2x']
+
+                    # Download image
+                    img_response = requests.get(photo_url, timeout=15)
+                    if img_response.status_code == 200:
+                        image = Image.open(io.BytesIO(img_response.content))
+                        print(f"[PEXELS] ✅ Downloaded photo: {image.size}", flush=True)
+                        return image
+                    else:
+                        print(f"[PEXELS] Failed to download image", flush=True)
+                        return None
+                else:
+                    print(f"[PEXELS] No photos found for query", flush=True)
+                    return None
+
+            else:
+                print(f"[PEXELS] API error {response.status_code}: {response.text[:200]}", flush=True)
+                return None
+
+        except Exception as e:
+            print(f"[PEXELS] Exception: {e}", flush=True)
+            return None
 
     def _generate_gradient_background(self, keywords: List[str], width: int, height: int) -> Image.Image:
         """
@@ -224,23 +295,39 @@ class ReelGenerator:
         width, height = self.ASPECT_RATIOS.get(aspect_ratio, self.ASPECT_RATIOS['reel'])
         colors = self.COLOR_SCHEMES.get(style, self.COLOR_SCHEMES['modern'])
 
-        # Use gradient backgrounds if enabled
+        # Use professional photos if enabled
         if self.use_ai:
-            print(f"[REEL] ✅ Gradient backgrounds ENABLED - generating unique design", flush=True)
-            # Use keywords (hashtags) to select color palette
-            gradient_keywords = keywords if keywords else []
-            print(f"[REEL] 🎨 Keywords for palette: {gradient_keywords}", flush=True)
+            print(f"[REEL] ✅ Professional photos ENABLED", flush=True)
+            # Use keywords (hashtags) for photo search
+            search_keywords = keywords if keywords else []
+            print(f"[REEL] 🔍 Keywords: {search_keywords}", flush=True)
 
-            # Generate gradient background
-            img = self._generate_gradient_background(gradient_keywords, width, height)
+            # Try to fetch photo from Pexels
+            photo = self._fetch_pexels_photo(search_keywords)
 
-            # Add subtle overlay for text contrast
-            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
-            img = img.convert('RGBA')
-            img = Image.alpha_composite(img, overlay)
-            img = img.convert('RGB')
+            if photo:
+                # Resize photo to target dimensions
+                img = photo.resize((width, height), Image.Resampling.LANCZOS)
 
-            print(f"[REEL] ✅ Using gradient background", flush=True)
+                # Add semi-transparent overlay for text readability
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))
+                img = img.convert('RGBA')
+                img = Image.alpha_composite(img, overlay)
+                img = img.convert('RGB')
+
+                print(f"[REEL] ✅ Using Pexels photo", flush=True)
+            else:
+                # Fallback to gradient if photo fetch failed
+                print(f"[REEL] ⚠️  Photo fetch failed - using gradient fallback", flush=True)
+                img = self._generate_gradient_background(search_keywords, width, height)
+
+                # Add subtle overlay
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+                img = img.convert('RGBA')
+                img = Image.alpha_composite(img, overlay)
+                img = img.convert('RGB')
+
+                print(f"[REEL] ✅ Using gradient background", flush=True)
         else:
             # Create basic colored background
             print(f"[REEL] ⚠️  AI generation DISABLED - using colored background", flush=True)
@@ -514,19 +601,19 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, unsplash_key: Optional[str] = None):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
-        use_ai: Use professional stock photos (Unsplash) instead of basic backgrounds
-        unsplash_key: Unsplash API key (optional - works without but lower rate limits)
+        use_ai: Use professional stock photos (Pexels) instead of basic backgrounds
+        pexels_key: Pexels API key (get free at https://www.pexels.com/api/)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai, unsplash_key=unsplash_key)
+        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key)
     else:
         return MockReelGenerator(output_dir)

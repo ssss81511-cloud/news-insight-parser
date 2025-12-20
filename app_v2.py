@@ -70,7 +70,7 @@ scheduler = get_scheduler()
 # Environment variables for automation
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
-UNSPLASH_ACCESS_KEY = os.getenv('UNSPLASH_ACCESS_KEY')  # Optional - for professional stock photos
+PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')  # Required for professional photos - get free at https://www.pexels.com/api/
 AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
 AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
 AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
@@ -85,11 +85,11 @@ logger = logging.getLogger(__name__)
 
 # Initialize automation components
 topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
-# IMPORTANT: use_ai=True enables professional stock photos from Unsplash (works WITHOUT key!)
+# IMPORTANT: use_ai=True + pexels_key enables professional stock photos (gradient fallback if no key)
 reel_generator = create_reel_generator(
     output_dir='generated_reels',
     use_ai=True,
-    unsplash_key=UNSPLASH_ACCESS_KEY
+    pexels_key=PEXELS_API_KEY
 )
 
 # Initialize Telegram poster if credentials are provided
