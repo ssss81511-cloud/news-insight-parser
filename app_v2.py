@@ -83,7 +83,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize automation components
-topic_selector = TopicSelector(db)
+topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
 reel_generator = create_reel_generator(output_dir='generated_reels')
 
 # Initialize Telegram poster if credentials are provided

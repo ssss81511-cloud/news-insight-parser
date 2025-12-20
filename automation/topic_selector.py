@@ -22,14 +22,16 @@ class TopicSelector:
     - Supports multiple selection strategies
     """
 
-    def __init__(self, db_manager: UniversalDatabaseManager):
+    def __init__(self, db_manager: UniversalDatabaseManager, insights_analyzer=None):
         """
         Initialize TopicSelector
 
         Args:
             db_manager: Database manager instance for accessing topics and tracking usage
+            insights_analyzer: InsightsAnalyzer instance for detecting topics (optional)
         """
         self.db = db_manager
+        self.insights_analyzer = insights_analyzer
 
     def select_next_topic(self, exclude_days: int = 30,
                          prefer_trending: bool = True,
@@ -102,9 +104,9 @@ class TopicSelector:
 
     def _get_available_topics(self, min_posts: int = 3) -> List[Dict]:
         """
-        Get available topics from database
+        Get available topics using InsightsAnalyzer
 
-        This queries the analytics results to find topics with sufficient posts.
+        Uses LDA topic modeling to detect topics from recent posts.
 
         Args:
             min_posts: Minimum number of posts required
@@ -114,58 +116,50 @@ class TopicSelector:
         """
         topics = []
 
-        try:
-            # Query the database for topic analysis results
-            # Topics are stored in the 'topics' table from analytics
-            query = text("""
-                SELECT
-                    topic_id,
-                    keywords,
-                    post_count,
-                    avg_importance,
-                    created_at
-                FROM topics
-                WHERE post_count >= :min_posts
-                ORDER BY post_count DESC, avg_importance DESC
-                LIMIT 50
-            """)
+        # Method 1: Use InsightsAnalyzer (preferred)
+        if self.insights_analyzer:
+            print(f"[TOPIC SELECTOR] Using InsightsAnalyzer to detect topics", flush=True)
+            try:
+                insights_topics = self.insights_analyzer.detect_topics(
+                    lookback_days=30,
+                    n_topics=10,
+                    n_words=10
+                )
 
-            result = self.db.session.execute(query, {'min_posts': min_posts})
-            rows = result.fetchall()
+                if insights_topics:
+                    print(f"[TOPIC SELECTOR] InsightsAnalyzer found {len(insights_topics)} topics", flush=True)
+                    # Convert insights format to TopicSelector format
+                    for topic in insights_topics:
+                        keywords = topic.get('keywords', [])
+                        post_count = topic.get('post_count', 0)
 
-            for row in rows:
-                topic_id, keywords_json, post_count, avg_importance, created_at = row
+                        # Only include topics with sufficient posts
+                        if post_count >= min_posts:
+                            # Get actual post IDs for this topic
+                            post_ids = self._get_posts_for_topic(keywords)
 
-                # Parse keywords
-                try:
-                    keywords = json.loads(keywords_json) if isinstance(keywords_json, str) else keywords_json
-                except:
-                    keywords = keywords_json.split(',') if isinstance(keywords_json, str) else []
+                            if len(post_ids) >= min_posts:
+                                topics.append({
+                                    'topic_id': topic.get('topic_id'),
+                                    'keywords': keywords,
+                                    'post_count': len(post_ids),
+                                    'avg_importance': 60.0,  # Estimated from LDA
+                                    'is_trending': True,  # Recent topics are trending
+                                    'posts': post_ids
+                                })
 
-                # Get posts for this topic
-                post_ids = self._get_posts_for_topic(keywords)
+                    if topics:
+                        print(f"[TOPIC SELECTOR] Converted {len(topics)} topics with sufficient posts", flush=True)
+                        return topics
+                    else:
+                        print(f"[TOPIC SELECTOR] No topics met min_posts={min_posts} threshold", flush=True)
 
-                # Determine if trending (created recently with high importance)
-                is_trending = False
-                if created_at:
-                    if isinstance(created_at, str):
-                        created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
-                    is_trending = age_hours < 72 and avg_importance > 50  # Last 3 days, high importance
+            except Exception as e:
+                print(f"[TOPIC SELECTOR] Error using InsightsAnalyzer: {e}", flush=True)
 
-                topics.append({
-                    'topic_id': topic_id,
-                    'keywords': keywords,
-                    'post_count': post_count,
-                    'avg_importance': avg_importance,
-                    'is_trending': is_trending,
-                    'posts': post_ids
-                })
-
-        except Exception as e:
-            print(f"[TOPIC SELECTOR] Error querying topics table: {e}", flush=True)
-            # Fallback: Generate ad-hoc topics from recent high-importance posts
-            topics = self._generate_adhoc_topics(min_posts)
+        # Method 2: Fallback to ad-hoc topics from posts with AI analysis
+        print(f"[TOPIC SELECTOR] Falling back to ad-hoc topic generation", flush=True)
+        topics = self._generate_adhoc_topics(min_posts)
 
         return topics
 
