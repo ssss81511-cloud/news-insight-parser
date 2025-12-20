@@ -83,92 +83,93 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, hf_token: Optional[str] = None):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, unsplash_key: Optional[str] = None):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
-            use_ai: Use AI image generation (Stable Diffusion) instead of basic text overlay
-            hf_token: Hugging Face API token (REQUIRED for AI - get free at https://huggingface.co/settings/tokens)
+            use_ai: Use professional photos from Unsplash (free, high quality)
+            unsplash_key: Unsplash API key (optional - get free at https://unsplash.com/developers)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
 
         self.output_dir = output_dir
         self.use_ai = use_ai
-        self.hf_token = hf_token
+        self.unsplash_key = unsplash_key
         os.makedirs(output_dir, exist_ok=True)
 
-        # Hugging Face Inference API endpoint for Stable Diffusion
-        # Updated to new router endpoint (old api-inference.huggingface.co returned 410 Gone)
-        self.hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+        # Unsplash API for professional stock photos (FREE, better than AI!)
+        self.unsplash_api_url = "https://api.unsplash.com/photos/random"
 
-        if use_ai and not hf_token:
-            print(f"[REEL GENERATOR] ⚠️  WARNING: AI generation enabled but NO HF TOKEN!", flush=True)
-            print(f"[REEL GENERATOR] ⚠️  Get free token: https://huggingface.co/settings/tokens", flush=True)
-            print(f"[REEL GENERATOR] ⚠️  Set HUGGING_FACE_TOKEN in .env file", flush=True)
-            print(f"[REEL GENERATOR] ⚠️  AI generation will FAIL without token!", flush=True)
+        print(f"[REEL GENERATOR] Initialized: Photos={use_ai}, Unsplash={'✅' if unsplash_key else '❌ (using fallback)'}", flush=True)
 
-        print(f"[REEL GENERATOR] Initialized: AI={use_ai}, HF Token={'✅ Set' if hf_token else '❌ MISSING'}", flush=True)
-
-    def _generate_ai_image(self, prompt: str, retries: int = 3) -> Optional[Image.Image]:
+    def _fetch_stock_photo(self, keywords: List[str]) -> Optional[Image.Image]:
         """
-        Generate image using Stable Diffusion via Hugging Face Inference API
+        Fetch professional stock photo from Unsplash
 
         Args:
-            prompt: Text prompt for image generation
-            retries: Number of retries if API is loading
+            keywords: List of keywords for search
 
         Returns:
             PIL Image object or None if failed
         """
-        if not self.hf_token:
-            print(f"[AI IMAGE] ❌ No HF token - skipping AI generation", flush=True)
-            return None
+        # Build search query from keywords
+        query = ', '.join(keywords[:3]) if keywords else 'technology, business, abstract'
 
-        print(f"[AI IMAGE] Generating with prompt: {prompt[:100]}...", flush=True)
+        print(f"[STOCK PHOTO] Fetching from Unsplash: {query}", flush=True)
 
-        headers = {
-            "Authorization": f"Bearer {self.hf_token}",
-            "Content-Type": "application/json"
-        }
-        payload = {"inputs": prompt}
+        try:
+            # Unsplash API params
+            params = {
+                'query': query,
+                'orientation': 'portrait',  # For reels (9:16)
+                'content_filter': 'high',   # Safe for work
+                'count': 1
+            }
 
-        for attempt in range(retries):
-            try:
-                response = requests.post(self.hf_api_url, headers=headers, json=payload, timeout=60)
+            # Add API key if available (optional - works without but has rate limits)
+            headers = {}
+            if self.unsplash_key:
+                headers['Authorization'] = f'Client-ID {self.unsplash_key}'
 
-                if response.status_code == 200:
-                    # Success - return image
-                    image = Image.open(io.BytesIO(response.content))
-                    print(f"[AI IMAGE] Generated successfully: {image.size}", flush=True)
-                    return image
+            response = requests.get(
+                self.unsplash_api_url,
+                params=params,
+                headers=headers if headers else None,
+                timeout=10
+            )
 
-                elif response.status_code == 503:
-                    # Model is loading - wait and retry
-                    try:
-                        error_data = response.json()
-                        wait_time = error_data.get('estimated_time', 20)
-                    except:
-                        wait_time = 20
+            if response.status_code == 200:
+                data = response.json()
 
-                    print(f"[AI IMAGE] Model loading... waiting {wait_time}s (attempt {attempt+1}/{retries})", flush=True)
-                    time.sleep(wait_time)
-                    continue
-
+                # Get image URL (regular size - good quality, reasonable size)
+                if isinstance(data, list) and len(data) > 0:
+                    photo_url = data[0]['urls']['regular']
+                elif isinstance(data, dict):
+                    photo_url = data['urls']['regular']
                 else:
-                    print(f"[AI IMAGE] Error {response.status_code}: {response.text[:200]}", flush=True)
+                    print(f"[STOCK PHOTO] Unexpected response format", flush=True)
                     return None
 
-            except Exception as e:
-                print(f"[AI IMAGE] Exception: {e}", flush=True)
-                if attempt < retries - 1:
-                    time.sleep(5)
-                    continue
+                # Download image
+                img_response = requests.get(photo_url, timeout=10)
+                if img_response.status_code == 200:
+                    image = Image.open(io.BytesIO(img_response.content))
+                    print(f"[STOCK PHOTO] ✅ Downloaded: {image.size}", flush=True)
+                    return image
+                else:
+                    print(f"[STOCK PHOTO] Failed to download image", flush=True)
+                    return None
+
+            else:
+                print(f"[STOCK PHOTO] API error {response.status_code}: {response.text[:200]}", flush=True)
                 return None
 
-        return None
+        except Exception as e:
+            print(f"[STOCK PHOTO] Exception: {e}", flush=True)
+            return None
 
     def _create_prompt_from_content(self, title: str, keywords: List[str]) -> str:
         """
@@ -226,20 +227,18 @@ class ReelGenerator:
         width, height = self.ASPECT_RATIOS.get(aspect_ratio, self.ASPECT_RATIOS['reel'])
         colors = self.COLOR_SCHEMES.get(style, self.COLOR_SCHEMES['modern'])
 
-        # Use AI image generation if enabled
+        # Use stock photos if enabled
         if self.use_ai:
-            print(f"[REEL] ✅ AI generation ENABLED - attempting to generate AI image", flush=True)
-            # Use keywords (hashtags) instead of key_points for better AI prompts
-            prompt_keywords = keywords if keywords else []
-            print(f"[REEL] 🏷️  Keywords for AI: {prompt_keywords}", flush=True)
-            prompt = self._create_prompt_from_content(title, prompt_keywords)
-            print(f"[REEL] 📝 Prompt created: {prompt}", flush=True)
+            print(f"[REEL] ✅ Stock photos ENABLED - fetching professional image", flush=True)
+            # Use keywords (hashtags) for photo search
+            search_keywords = keywords if keywords else []
+            print(f"[REEL] 🏷️  Keywords for search: {search_keywords}", flush=True)
 
-            ai_image = self._generate_ai_image(prompt)
+            stock_image = self._fetch_stock_photo(search_keywords)
 
-            if ai_image:
-                # Resize AI image to target dimensions
-                img = ai_image.resize((width, height), Image.Resampling.LANCZOS)
+            if stock_image:
+                # Resize stock photo to target dimensions
+                img = stock_image.resize((width, height), Image.Resampling.LANCZOS)
 
                 # Add semi-transparent overlay for text readability
                 overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
@@ -247,11 +246,11 @@ class ReelGenerator:
                 img = Image.alpha_composite(img, overlay)
                 img = img.convert('RGB')
 
-                print(f"[REEL] ✅ Using AI-generated background (size: {ai_image.size})", flush=True)
+                print(f"[REEL] ✅ Using stock photo background", flush=True)
             else:
-                # Fallback to basic colored background if AI fails
-                print(f"[REEL] ❌ AI generation FAILED - using colored fallback background", flush=True)
-                print(f"[REEL] ⚠️  Check logs above for API error details", flush=True)
+                # Fallback to basic colored background if fetch fails
+                print(f"[REEL] ❌ Stock photo fetch FAILED - using colored fallback", flush=True)
+                print(f"[REEL] ⚠️  Check logs above for error details", flush=True)
                 img = Image.new('RGB', (width, height), colors['background'])
         else:
             # Create basic colored background
@@ -526,19 +525,19 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, hf_token: Optional[str] = None):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, unsplash_key: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
-        use_ai: Use AI image generation (Stable Diffusion) for professional images
-        hf_token: Hugging Face API token (required for AI generation)
+        use_ai: Use professional stock photos (Unsplash) instead of basic backgrounds
+        unsplash_key: Unsplash API key (optional - works without but lower rate limits)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai, hf_token=hf_token)
+        return ReelGenerator(output_dir, use_ai=use_ai, unsplash_key=unsplash_key)
     else:
         return MockReelGenerator(output_dir)
