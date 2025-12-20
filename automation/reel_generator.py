@@ -186,6 +186,7 @@ class ReelGenerator:
         self,
         title: str,
         key_points: List[str],
+        keywords: Optional[List[str]] = None,
         aspect_ratio: str = 'reel',
         style: str = 'modern',
         footer_text: Optional[str] = None
@@ -196,6 +197,7 @@ class ReelGenerator:
         Args:
             title: Main title text
             key_points: List of key points to display
+            keywords: Short keywords for AI prompt (e.g., ['AI', 'technology', 'startup'])
             aspect_ratio: One of: 'square', 'reel', 'story', 'landscape', 'twitter'
             style: Color scheme: 'modern', 'professional', 'vibrant', 'minimal', 'dark'
             footer_text: Optional footer text (e.g., channel name)
@@ -212,8 +214,11 @@ class ReelGenerator:
         # Use AI image generation if enabled
         if self.use_ai:
             print(f"[REEL] ✅ AI generation ENABLED - attempting to generate AI image", flush=True)
-            prompt = self._create_prompt_from_content(title, key_points[:3] if key_points else [])
-            print(f"[REEL] 📝 Prompt created: {prompt[:100]}...", flush=True)
+            # Use keywords (hashtags) instead of key_points for better AI prompts
+            prompt_keywords = keywords if keywords else []
+            print(f"[REEL] 🏷️  Keywords for AI: {prompt_keywords}", flush=True)
+            prompt = self._create_prompt_from_content(title, prompt_keywords)
+            print(f"[REEL] 📝 Prompt created: {prompt}", flush=True)
 
             ai_image = self._generate_ai_image(prompt)
 
@@ -446,10 +451,23 @@ class ReelGenerator:
         if not key_points:
             key_points = ['Полезная информация из анализа новостей', 'Подписывайтесь на канал']
 
+        # Extract hashtags for AI prompt (short keywords work better than long key_points)
+        hashtags = content.get('hashtags', [])
+        if isinstance(hashtags, str):
+            import json
+            try:
+                hashtags = json.loads(hashtags)
+            except:
+                hashtags = hashtags.split()
+
+        # Clean hashtags - remove # symbol for AI prompt
+        keywords = [tag.lstrip('#') for tag in hashtags] if hashtags else []
+
         # Generate
         return self.generate_reel(
             title=title,
             key_points=key_points,
+            keywords=keywords,  # Pass hashtags as keywords for AI prompt
             aspect_ratio=aspect_ratio,
             style=style,
             footer_text='News Insight Parser'
