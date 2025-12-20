@@ -13,7 +13,7 @@ import feedparser
 import requests
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from parsers.base_parser import BaseParser
 from loguru import logger
@@ -261,7 +261,7 @@ class VCBlogsParser(BaseParser):
                 'has_focus_theme': has_focus_theme,
                 'source_method': 'rss',
             },
-            'created_at': datetime.fromtimestamp(raw_post['created_utc']) if raw_post['created_utc'] else datetime.utcnow(),
+            'created_at': datetime.fromtimestamp(raw_post['created_utc'], tz=timezone.utc) if raw_post['created_utc'] else datetime.now(timezone.utc),
         }
 
         # Генерируем content_hash
@@ -306,7 +306,7 @@ class VCBlogsParser(BaseParser):
             'score': 0,
             'parent_comment_id': None,
             'is_op': False,
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
         }
 
         return normalized

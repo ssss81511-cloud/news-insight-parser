@@ -10,7 +10,7 @@ Parses TechCrunch RSS feeds for:
 import re
 import time
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import feedparser
 from loguru import logger
@@ -190,12 +190,12 @@ class TechCrunchParser(BaseParser):
                     # feedparser provides time_struct
                     from email.utils import parsedate_to_datetime
                     dt = parsedate_to_datetime(published_str)
-                    # Make timezone-naive to match database expectations
-                    created_at = dt.replace(tzinfo=None) if dt.tzinfo else dt
+                    # Ensure timezone-aware datetime
+                    created_at = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
                 except:
-                    created_at = datetime.utcnow()
+                    created_at = datetime.now(timezone.utc)
             else:
-                created_at = datetime.utcnow()
+                created_at = datetime.now(timezone.utc)
 
             # Tags
             tags = raw_post.get('tags', [])
