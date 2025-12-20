@@ -117,7 +117,7 @@ if GROQ_API_KEY:
             'content_format': os.getenv('CONTENT_FORMAT', 'long_post'),
             'content_language': os.getenv('CONTENT_LANGUAGE', 'ru'),
             'content_tone': os.getenv('CONTENT_TONE', 'professional'),
-            'reel_aspect_ratio': os.getenv('REEL_ASPECT_RATIO', 'reel'),
+            'reel_aspect_ratio': os.getenv('REEL_ASPECT_RATIO', 'square'),
             'reel_style': os.getenv('REEL_STYLE', 'modern'),
             'enable_reel': os.getenv('ENABLE_REEL', 'true').lower() == 'true',
             'enable_telegram': telegram_poster is not None,
