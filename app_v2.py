@@ -372,6 +372,47 @@ def ai_analyze_batch():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+def run_auto_ai_analysis():
+    """
+    Automatically analyze all posts without AI analysis
+    Called after parsing completes
+    """
+    try:
+        from storage.universal_models import UniversalPost
+
+        # Get ALL posts without AI analysis (no limit!)
+        posts = db.session.query(UniversalPost).filter(
+            UniversalPost.ai_summary == None
+        ).order_by(
+            UniversalPost.importance_score.desc()
+        ).all()
+
+        if not posts:
+            print("[AI] No posts to analyze", flush=True)
+            return
+
+        print(f"[AI] Found {len(posts)} posts without AI analysis", flush=True)
+
+        analyzed = 0
+        failed = 0
+
+        for post in posts:
+            try:
+                print(f"[AI] Analyzing post {post.id}: {post.title[:50]}...", flush=True)
+                analysis = ai_analyzer.analyze_post(post.title, post.content or '')
+                db.save_ai_analysis(post.id, analysis)
+                analyzed += 1
+                print(f"[AI] Successfully analyzed post {post.id} ({analyzed}/{len(posts)})", flush=True)
+            except Exception as e:
+                failed += 1
+                print(f"[AI] Failed to analyze post {post.id}: {e}", flush=True)
+
+        print(f"[AI] AI analysis complete: {analyzed} analyzed, {failed} failed", flush=True)
+
+    except Exception as e:
+        print(f"[AI] Error in auto AI analysis: {e}", flush=True)
+
+
 def run_parser(sources=None, limit=20):
     """Background task to run the parser"""
     parser_status['is_running'] = True
@@ -391,6 +432,12 @@ def run_parser(sources=None, limit=20):
             print(f"[PARSER] Starting to parse all sources", flush=True)
             results = orchestrator.parse_all(limit_per_section=limit)
             print(f"[PARSER] Completed parsing all sources: {results}", flush=True)
+
+        # AUTO AI ANALYSIS: Analyze all posts without AI analysis
+        parser_status['current_section'] = 'AI анализ'
+        print("[PARSER] Starting automatic AI analysis for new posts", flush=True)
+        run_auto_ai_analysis()
+        print("[PARSER] AI analysis completed", flush=True)
 
     except Exception as e:
         import traceback
