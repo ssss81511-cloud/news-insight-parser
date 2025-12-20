@@ -19,8 +19,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Hugging Face Stable Diffusion endpoint (FREE but requires token)
-HF_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+# Hugging Face Inference API endpoint (FREE but requires token)
+# Using FLUX.1-schnell - faster and better quality than Stable Diffusion
+HF_API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 HF_TOKEN = os.getenv('HUGGING_FACE_TOKEN')
 
 def test_ai_image_generation():

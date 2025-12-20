@@ -101,7 +101,8 @@ class ReelGenerator:
         os.makedirs(output_dir, exist_ok=True)
 
         # Hugging Face Inference API endpoint for Stable Diffusion
-        self.hf_api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+        # Updated to new router endpoint (old api-inference.huggingface.co returned 410 Gone)
+        self.hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 
         if use_ai and not hf_token:
             print(f"[REEL GENERATOR] ⚠️  WARNING: AI generation enabled but NO HF TOKEN!", flush=True)
