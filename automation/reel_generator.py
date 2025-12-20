@@ -488,17 +488,18 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels'):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
+        use_ai: Use AI image generation (Stable Diffusion) for professional images
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir)
+        return ReelGenerator(output_dir, use_ai=use_ai)
     else:
         return MockReelGenerator(output_dir)
