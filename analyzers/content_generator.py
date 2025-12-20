@@ -148,11 +148,15 @@ class ContentGenerator:
         from storage.universal_models import UniversalPost
         from datetime import timedelta
 
+        print(f"[TOPIC GEN] Keywords: {topic_keywords[:5]}, lookback: {lookback_days} days", flush=True)
+
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
         posts = self.db.session.query(UniversalPost).filter(
             UniversalPost.created_at >= cutoff_date
         ).all()
+
+        print(f"[TOPIC GEN] Total posts in last {lookback_days} days: {len(posts)}", flush=True)
 
         # Score posts by topic relevance
         scored_posts = []
@@ -162,14 +166,19 @@ class ContentGenerator:
             if score > 0:
                 scored_posts.append((post, score))
 
+        print(f"[TOPIC GEN] Posts matching keywords: {len(scored_posts)}", flush=True)
+
         if not scored_posts:
-            raise ValueError(f"No posts found for topic: {', '.join(topic_keywords[:3])}")
+            keywords_str = ', '.join(topic_keywords[:5])
+            raise ValueError(f"Не найдено постов с ключевыми словами: {keywords_str}. Попробуйте другой топик или сначала запустите парсинг.")
 
         # Sort by topic relevance, then importance
         scored_posts.sort(key=lambda x: (x[1], x[0].importance_score), reverse=True)
 
         # Take top 10
         top_posts = [p for p, score in scored_posts[:10]]
+
+        print(f"[TOPIC GEN] Using top {len(top_posts)} posts for generation", flush=True)
 
         return self.generate_from_cluster(top_posts, format_type, tone, language)
 

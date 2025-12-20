@@ -391,6 +391,10 @@ def content_studio():
     # Get recently generated content
     generated = db.get_generated_content(limit=20)
 
+    print(f"[CONTENT STUDIO] Clusters: {len(clusters)}, Trends: {len(trends.get('trending_keywords', []))}, Topics: {len(topics)}", flush=True)
+    if topics:
+        print(f"[CONTENT STUDIO] First topic keywords: {topics[0].get('keywords', [])[:3]}", flush=True)
+
     return render_template('content_studio.html',
                           clusters=clusters,
                           trends=trends.get('trending_keywords', []),
