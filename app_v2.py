@@ -449,7 +449,13 @@ def generate_content():
         elif source_type == 'topic':
             keywords = data.get('keywords', [])
             lookback_days = data.get('lookback_days', 7)
-            print(f"[CONTENT GEN] Topic mode: keywords={keywords[:3]}, lookback={lookback_days} days", flush=True)
+
+            # Validate keywords
+            if not keywords or not isinstance(keywords, list):
+                print(f"[CONTENT GEN] ERROR: Invalid keywords={keywords}", flush=True)
+                return jsonify({'status': 'error', 'message': 'Неверный формат ключевых слов топика'}), 400
+
+            print(f"[CONTENT GEN] Topic mode: keywords={keywords[:3]}..., total={len(keywords)}, lookback={lookback_days} days", flush=True)
 
             result = content_generator.generate_from_topic(
                 keywords, lookback_days, format_type, tone, language

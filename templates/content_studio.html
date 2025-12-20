@@ -97,7 +97,9 @@
 
             <div id="loading" style="display: none;" class="loading-indicator">
                 <div class="spinner"></div>
-                <p>Генерирую контент... Это может занять до 30 секунд</p>
+                <p>🤖 Генерирую контент...</p>
+                <p style="font-size: 14px; color: #666;">Это может занять 30-90 секунд. AI анализирует посты и создает уникальный контент.</p>
+                <p id="loading-timer" style="font-size: 12px; color: #999; margin-top: 10px;"></p>
             </div>
         </div>
 
@@ -387,22 +389,49 @@ document.getElementById('generate-btn').addEventListener('click', async function
         requestData.lookback_days = 7;
     } else if (sourceType === 'topic') {
         const topicSelect = document.getElementById('topic-keywords');
-        requestData.keywords = JSON.parse(topicSelect.value);
+        try {
+            requestData.keywords = JSON.parse(topicSelect.value);
+        } catch (e) {
+            alert('Ошибка парсинга топика. Попробуйте другой топик.');
+            return;
+        }
         requestData.lookback_days = 7;
     } else if (sourceType === 'cluster') {
         requestData.cluster_id = document.getElementById('cluster-id').value;
     }
 
+    console.log('Request data:', requestData);
+
     // Show loading
     document.getElementById('loading').style.display = 'block';
-    document.getElementById('generate-btn').disabled = true;
+    document.getElementById('generate-btn').disabled = false;
+
+    // Start timer
+    let startTime = Date.now();
+    const timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('loading-timer').textContent = `Прошло: ${elapsed} секунд...`;
+    }, 1000);
 
     try {
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
+
         const response = await fetch('/api/generate-content', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+
+        // Check if response is ok
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Ошибка сервера' }));
+            throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
 
         const result = await response.json();
 
@@ -414,8 +443,14 @@ document.getElementById('generate-btn').addEventListener('click', async function
             alert('Ошибка: ' + result.message);
         }
     } catch (error) {
-        alert('Ошибка генерации: ' + error);
+        if (error.name === 'AbortError') {
+            alert('Генерация заняла слишком много времени (>2 минут). Попробуйте выбрать меньше постов или другой формат.');
+        } else {
+            alert('Ошибка генерации: ' + error.message);
+        }
+        console.error('Generation error:', error);
     } finally {
+        clearInterval(timerInterval);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('generate-btn').disabled = false;
     }
