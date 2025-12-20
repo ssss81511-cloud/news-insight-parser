@@ -505,6 +505,109 @@ class UniversalDatabaseManager:
             print(f"Error cleaning up old posts: {e}")
             return 0
 
+    def save_generated_content(self, content_data: dict) -> int:
+        """
+        Save AI-generated content to database
+
+        Args:
+            content_data: Dict with content data
+
+        Returns:
+            ID of saved content
+        """
+        try:
+            from storage.universal_models import GeneratedContent
+
+            content = GeneratedContent(
+                format_type=content_data['format'],
+                language=content_data.get('language', 'en'),
+                tone=content_data.get('tone', 'professional'),
+                title=content_data.get('title', ''),
+                content=json.dumps(content_data['content']) if isinstance(content_data['content'], list) else content_data['content'],
+                hashtags=json.dumps(content_data.get('hashtags', [])),
+                key_points=json.dumps(content_data.get('key_points', [])),
+                word_count=content_data.get('word_count', 0),
+                source_type=content_data.get('source_type', 'unknown'),
+                source_description=content_data.get('source_description', ''),
+                source_posts=json.dumps(content_data.get('source_posts', []))
+            )
+
+            self.session.add(content)
+            self.session.commit()
+            return content.id
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error saving generated content: {e}")
+            return 0
+
+    def get_generated_content(self, limit: int = 50, format_type: Optional[str] = None,
+                              only_published: bool = False) -> List:
+        """Get generated content with filtering"""
+        try:
+            from storage.universal_models import GeneratedContent
+
+            query = self.session.query(GeneratedContent)
+
+            if format_type:
+                query = query.filter_by(format_type=format_type)
+            if only_published:
+                query = query.filter_by(is_published=True)
+
+            return query.order_by(GeneratedContent.created_at.desc()).limit(limit).all()
+        except Exception as e:
+            self.reset_session()
+            from storage.universal_models import GeneratedContent
+
+            query = self.session.query(GeneratedContent)
+
+            if format_type:
+                query = query.filter_by(format_type=format_type)
+            if only_published:
+                query = query.filter_by(is_published=True)
+
+            return query.order_by(GeneratedContent.created_at.desc()).limit(limit).all()
+
+    def get_content_by_id(self, content_id: int):
+        """Get generated content by ID"""
+        try:
+            from storage.universal_models import GeneratedContent
+            return self.session.query(GeneratedContent).filter_by(id=content_id).first()
+        except Exception as e:
+            self.reset_session()
+            from storage.universal_models import GeneratedContent
+            return self.session.query(GeneratedContent).filter_by(id=content_id).first()
+
+    def mark_content_published(self, content_id: int, platform: str):
+        """Mark content as published"""
+        try:
+            from storage.universal_models import GeneratedContent
+
+            content = self.session.query(GeneratedContent).filter_by(id=content_id).first()
+            if content:
+                content.is_published = True
+                content.published_at = datetime.now(timezone.utc)
+                content.platform = platform
+                self.session.commit()
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error marking content as published: {e}")
+
+    def delete_generated_content(self, content_id: int) -> bool:
+        """Delete generated content"""
+        try:
+            from storage.universal_models import GeneratedContent
+
+            content = self.session.query(GeneratedContent).filter_by(id=content_id).first()
+            if content:
+                self.session.delete(content)
+                self.session.commit()
+                return True
+            return False
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error deleting content: {e}")
+            return False
+
     def close(self):
         """Close database session"""
         self.session.close()

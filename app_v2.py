@@ -8,6 +8,7 @@ from parsers.orchestrator import create_orchestrator
 from analyzers.enhanced_signal_detector import EnhancedSignalDetector
 from analyzers.insights_analyzer import InsightsAnalyzer
 from analyzers.ai_analyzer import AIAnalyzer
+from analyzers.content_generator import ContentGenerator
 from utils.helpers import time_ago, truncate_text, clean_html
 from utils.scheduler import get_scheduler
 from datetime import datetime, timezone
@@ -46,6 +47,9 @@ insights_analyzer = InsightsAnalyzer(db)
 # AI analyzer (Groq)
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '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')
 ai_analyzer = AIAnalyzer(api_key=GROQ_API_KEY)
+
+# Content generator for social media
+content_generator = ContentGenerator(api_key=GROQ_API_KEY, db_manager=db)
 
 # Scheduler for automatic parsing
 scheduler = get_scheduler()
@@ -368,6 +372,177 @@ def ai_analyze_batch():
             'message': f'Запущен анализ {len(posts)} постов (фоновая задача)',
             'posts_to_analyze': len(posts)
         })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/content-studio')
+def content_studio():
+    """Content generation studio page"""
+    # Get clusters for selection
+    clusters = insights_analyzer.cluster_similar_posts(lookback_days=7)
+
+    # Get trending keywords
+    trends = insights_analyzer.detect_trends(lookback_days=14)
+
+    # Get topics
+    topics = insights_analyzer.detect_topics(lookback_days=7)
+
+    # Get recently generated content
+    generated = db.get_generated_content(limit=20)
+
+    return render_template('content_studio.html',
+                          clusters=clusters,
+                          trends=trends.get('trending_keywords', []),
+                          topics=topics,
+                          generated=generated)
+
+
+@app.route('/api/generate-content', methods=['POST'])
+def generate_content():
+    """Generate social media content"""
+    try:
+        data = request.get_json() or {}
+
+        source_type = data.get('source_type')  # 'cluster', 'trend', 'topic', 'custom'
+        format_type = data.get('format', 'long_post')  # 'long_post', 'reel', 'thread'
+        tone = data.get('tone', 'professional')
+        language = data.get('language', 'en')
+
+        # Generate based on source type
+        if source_type == 'cluster':
+            cluster_id = data.get('cluster_id')
+            # Get posts from cluster (simplified - would need cluster storage)
+            from storage.universal_models import UniversalPost
+            posts = db.session.query(UniversalPost).order_by(
+                UniversalPost.importance_score.desc()
+            ).limit(10).all()
+
+            result = content_generator.generate_from_cluster(
+                posts, format_type, tone, language
+            )
+            result['source_type'] = 'cluster'
+            result['source_description'] = f'Cluster {cluster_id}'
+
+        elif source_type == 'trend':
+            keyword = data.get('keyword')
+            lookback_days = data.get('lookback_days', 7)
+
+            result = content_generator.generate_from_trend(
+                keyword, lookback_days, format_type, tone, language
+            )
+            result['source_type'] = 'trend'
+            result['source_description'] = f'Trending: {keyword}'
+
+        elif source_type == 'topic':
+            keywords = data.get('keywords', [])
+            lookback_days = data.get('lookback_days', 7)
+
+            result = content_generator.generate_from_topic(
+                keywords, lookback_days, format_type, tone, language
+            )
+            result['source_type'] = 'topic'
+            result['source_description'] = f'Topic: {", ".join(keywords[:3])}'
+
+        elif source_type == 'custom':
+            # Custom post IDs
+            post_ids = data.get('post_ids', [])
+            from storage.universal_models import UniversalPost
+
+            posts = db.session.query(UniversalPost).filter(
+                UniversalPost.id.in_(post_ids)
+            ).all()
+
+            result = content_generator.generate_from_cluster(
+                posts, format_type, tone, language
+            )
+            result['source_type'] = 'custom'
+            result['source_description'] = f'{len(post_ids)} selected posts'
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid source_type'}), 400
+
+        # Save to database
+        result['language'] = language
+        result['tone'] = tone
+        content_id = db.save_generated_content(result)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Content generated successfully',
+            'content_id': content_id,
+            'content': result
+        })
+
+    except Exception as e:
+        import traceback
+        error_msg = f"{e}\n{traceback.format_exc()}"
+        print(f"Content generation error: {error_msg}", flush=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/generated-content')
+def get_generated_content_api():
+    """Get generated content list"""
+    format_type = request.args.get('format', None)
+    only_published = request.args.get('published', 'false').lower() == 'true'
+
+    content = db.get_generated_content(
+        limit=50,
+        format_type=format_type,
+        only_published=only_published
+    )
+
+    # Convert to dict for JSON
+    result = []
+    for c in content:
+        result.append({
+            'id': c.id,
+            'format': c.format_type,
+            'title': c.title,
+            'content': c.content,
+            'hashtags': c.hashtags,
+            'word_count': c.word_count,
+            'is_published': c.is_published,
+            'platform': c.platform,
+            'created_at': c.created_at.isoformat() if c.created_at else None
+        })
+
+    return jsonify(result)
+
+
+@app.route('/api/mark-content-published/<int:content_id>', methods=['POST'])
+def mark_published(content_id):
+    """Mark content as published"""
+    try:
+        data = request.get_json() or {}
+        platform = data.get('platform', 'unknown')
+
+        db.mark_content_published(content_id, platform)
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Content marked as published'
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/delete-content/<int:content_id>', methods=['DELETE'])
+def delete_content(content_id):
+    """Delete generated content"""
+    try:
+        success = db.delete_generated_content(content_id)
+
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': 'Content deleted'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Content not found'
+            }), 404
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 

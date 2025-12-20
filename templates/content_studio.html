@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+
+{% block title %}Content Studio - News Insight Parser{% endblock %}
+
+{% block content %}
+<div class="content-studio">
+    <h2>✨ Content Studio</h2>
+    <p class="subtitle">Генерация контента для социальных сетей на основе ваших данных</p>
+
+    <div class="studio-grid">
+        <!-- Generator Panel -->
+        <div class="generator-panel">
+            <h3>Создать новый контент</h3>
+
+            <div class="form-group">
+                <label>Источник данных:</label>
+                <select id="source-type" class="form-control">
+                    <option value="trend">📈 Трендовое ключевое слово</option>
+                    <option value="topic">🏷️ Топик (несколько ключевых слов)</option>
+                    <option value="cluster">🔗 Кластер похожих постов</option>
+                </select>
+            </div>
+
+            <!-- Trend Input -->
+            <div id="trend-input" class="source-input">
+                <div class="form-group">
+                    <label>Выберите тренд:</label>
+                    <select id="trend-keyword" class="form-control">
+                        {% for trend in trends[:10] %}
+                        <option value="{{ trend.keyword }}">
+                            {{ trend.keyword }} (+{{ trend.growth_rate }}% роста, {{ trend.current_count }} упоминаний)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Topic Input -->
+            <div id="topic-input" class="source-input" style="display: none;">
+                <div class="form-group">
+                    <label>Выберите топик:</label>
+                    <select id="topic-keywords" class="form-control">
+                        {% for topic in topics %}
+                        <option value="{{ topic.keywords|tojson }}">
+                            Топик {{ topic.topic_id }}: {{ topic.keywords[:5]|join(', ') }} ({{ topic.post_count }} постов)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Cluster Input -->
+            <div id="cluster-input" class="source-input" style="display: none;">
+                <div class="form-group">
+                    <label>Выберите кластер:</label>
+                    <select id="cluster-id" class="form-control">
+                        {% for cluster in clusters %}
+                        <option value="{{ cluster.cluster_id }}">
+                            Кластер {{ cluster.cluster_id }}: {{ cluster.top_keywords[:3]|join(', ') }} ({{ cluster.size }} постов)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Формат контента:</label>
+                <select id="format-type" class="form-control">
+                    <option value="long_post">📝 Long Post (LinkedIn, Instagram carousel)</option>
+                    <option value="reel">📱 Reel/Short (Instagram Reels, TikTok)</option>
+                    <option value="thread">🧵 Thread (Twitter/X)</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Язык:</label>
+                    <select id="language" class="form-control">
+                        <option value="en">English</option>
+                        <option value="ru">Русский</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Тон:</label>
+                    <select id="tone" class="form-control">
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="inspirational">Inspirational</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="generate-btn" class="btn btn-primary btn-large">
+                🚀 Генерировать контент
+            </button>
+
+            <div id="loading" style="display: none;" class="loading-indicator">
+                <div class="spinner"></div>
+                <p>Генерирую контент... Это может занять до 30 секунд</p>
+            </div>
+        </div>
+
+        <!-- Preview Panel -->
+        <div class="preview-panel">
+            <h3>Предпросмотр</h3>
+            <div id="content-preview" class="content-preview">
+                <p class="empty-state">Выберите параметры и нажмите "Генерировать контент"</p>
+            </div>
+
+            <div id="preview-actions" style="display: none;" class="preview-actions">
+                <button id="copy-btn" class="btn btn-secondary">📋 Копировать</button>
+                <button id="mark-published-btn" class="btn btn-success">✅ Отметить как опубликовано</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generated Content History -->
+    <div class="generated-history">
+        <h3>История сгенерированного контента</h3>
+        <div class="content-grid">
+            {% for content in generated %}
+            <div class="content-card {{ 'published' if content.is_published else '' }}">
+                <div class="content-header">
+                    <span class="content-format">{{ content.format_type }}</span>
+                    {% if content.is_published %}
+                    <span class="badge badge-success">Опубликовано</span>
+                    {% endif %}
+                </div>
+                <h4>{{ content.title or 'Без названия' }}</h4>
+                <p class="content-snippet">{{ content.content[:150] }}...</p>
+                <div class="content-meta">
+                    <span>{{ content.word_count }} символов</span>
+                    <span>{{ content.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                </div>
+                <div class="content-actions">
+                    <button class="btn-small view-content" data-id="{{ content.id }}">Просмотр</button>
+                    <button class="btn-small delete-content" data-id="{{ content.id }}">Удалить</button>
+                </div>
+            </div>
+            {% else %}
+            <p class="empty-state">Пока нет сгенерированного контента</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.content-studio {
+    padding: 20px 0;
+}
+
+.subtitle {
+    color: #666;
+    margin-bottom: 30px;
+}
+
+.studio-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 40px;
+}
+
+.generator-panel, .preview-panel {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 15px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.loading-indicator {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.content-preview {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    min-height: 300px;
+    white-space: pre-wrap;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.empty-state {
+    text-align: center;
+    color: #999;
+    padding: 40px 20px;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.preview-actions button {
+    flex: 1;
+}
+
+.generated-history {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.content-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+.content-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.content-card.published {
+    border-color: #28a745;
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.content-format {
+    background: #007bff;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: #28a745;
+    color: white;
+}
+
+.content-card h4 {
+    margin: 10px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+.content-snippet {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 10px 0;
+}
+
+.content-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 12px;
+    color: #999;
+    margin: 10px 0;
+}
+
+.content-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 13px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-small:hover {
+    background: #f8f9fa;
+}
+
+@media (max-width: 768px) {
+    .studio-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// Source type switcher
+document.getElementById('source-type').addEventListener('change', function() {
+    document.querySelectorAll('.source-input').forEach(el => el.style.display = 'none');
+    const sourceType = this.value;
+    document.getElementById(`${sourceType}-input`).style.display = 'block';
+});
+
+// Generate content
+document.getElementById('generate-btn').addEventListener('click', async function() {
+    const sourceType = document.getElementById('source-type').value;
+    const formatType = document.getElementById('format-type').value;
+    const language = document.getElementById('language').value;
+    const tone = document.getElementById('tone').value;
+
+    let requestData = {
+        source_type: sourceType,
+        format: formatType,
+        language: language,
+        tone: tone
+    };
+
+    // Get source-specific data
+    if (sourceType === 'trend') {
+        requestData.keyword = document.getElementById('trend-keyword').value;
+        requestData.lookback_days = 7;
+    } else if (sourceType === 'topic') {
+        const topicSelect = document.getElementById('topic-keywords');
+        requestData.keywords = JSON.parse(topicSelect.value);
+        requestData.lookback_days = 7;
+    } else if (sourceType === 'cluster') {
+        requestData.cluster_id = document.getElementById('cluster-id').value;
+    }
+
+    // Show loading
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('generate-btn').disabled = true;
+
+    try {
+        const response = await fetch('/api/generate-content', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            displayGeneratedContent(result.content);
+            // Reload page to show in history
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Ошибка: ' + result.message);
+        }
+    } catch (error) {
+        alert('Ошибка генерации: ' + error);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('generate-btn').disabled = false;
+    }
+});
+
+function displayGeneratedContent(content) {
+    const preview = document.getElementById('content-preview');
+    let html = '';
+
+    if (content.title) {
+        html += `<h3>${content.title}</h3><hr>`;
+    }
+
+    if (Array.isArray(content.content)) {
+        // Thread format
+        html += content.content.map((tweet, i) => `<p><strong>${i+1}.</strong> ${tweet}</p>`).join('');
+    } else {
+        html += `<p>${content.content}</p>`;
+    }
+
+    if (content.hashtags && content.hashtags.length > 0) {
+        html += `<hr><p style="color: #007bff;">${content.hashtags.join(' ')}</p>`;
+    }
+
+    preview.innerHTML = html;
+    document.getElementById('preview-actions').style.display = 'flex';
+
+    // Store for copying
+    window.generatedContent = content;
+}
+
+// Copy to clipboard
+document.getElementById('copy-btn').addEventListener('click', function() {
+    const content = window.generatedContent;
+    if (!content) return;
+
+    let text = '';
+    if (content.title) text += content.title + '\n\n';
+
+    if (Array.isArray(content.content)) {
+        text += content.content.join('\n\n');
+    } else {
+        text += content.content;
+    }
+
+    if (content.hashtags && content.hashtags.length > 0) {
+        text += '\n\n' + content.hashtags.join(' ');
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Контент скопирован в буфер обмена!');
+    });
+});
+
+// Delete content
+document.querySelectorAll('.delete-content').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        if (!confirm('Удалить этот контент?')) return;
+
+        const contentId = this.dataset.id;
+        const response = await fetch(`/api/delete-content/${contentId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Ошибка удаления');
+        }
+    });
+});
+</script>
+{% endblock %}

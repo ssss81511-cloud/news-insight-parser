@@ -221,6 +221,57 @@ class ParserRun(Base):
         return f"<ParserRun {self.source}/{self.section} at {self.started_at}>"
 
 
+class GeneratedContent(Base):
+    """
+    Store AI-generated social media content
+
+    Tracks all generated posts for reuse and analytics
+    """
+    __tablename__ = 'generated_content'
+
+    id = Column(Integer, primary_key=True)
+
+    # Content metadata
+    format_type = Column(String(20), index=True)  # 'long_post', 'reel', 'thread'
+    language = Column(String(10), default='en')  # 'en', 'ru'
+    tone = Column(String(20), default='professional')  # 'professional', 'casual', 'inspirational'
+
+    # Generated content
+    title = Column(String(200), nullable=True)
+    content = Column(Text)  # Full content (or JSON array for threads)
+    hashtags = Column(Text)  # JSON array of hashtags
+    key_points = Column(Text, nullable=True)  # JSON array of key points
+
+    # Metadata
+    word_count = Column(Integer, default=0)
+    source_type = Column(String(20))  # 'cluster', 'trend', 'topic'
+    source_description = Column(String(500))  # Description of what was used
+    source_posts = Column(Text)  # JSON array of post IDs used
+
+    # Status
+    is_published = Column(Boolean, default=False, index=True)
+    published_at = Column(DateTime, nullable=True)
+    platform = Column(String(50), nullable=True)  # Where it was published
+
+    # Engagement (if tracked)
+    views = Column(Integer, default=0)
+    likes = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+
+    # Temporal
+    created_at = Column(DateTime, default=func.now(), index=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Indexes
+    __table_args__ = (
+        Index('idx_format_created', 'format_type', 'created_at'),
+        Index('idx_published_status', 'is_published', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f"<GeneratedContent {self.format_type}: {self.title[:50] if self.title else 'Untitled'}>"
+
+
 # Database initialization
 def init_universal_db(database_url='sqlite:///data/insights.db'):
     """Initialize database with universal models"""
