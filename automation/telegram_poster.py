@@ -116,8 +116,13 @@ class TelegramPoster:
         # Build message text
         message_text = self._format_message(content)
 
-        # Telegram message length limit is 4096 characters
-        if len(message_text) > 4000:
+        # Telegram limits:
+        # - Photo caption: 1024 characters
+        # - Text message: 4096 characters
+        if media_path and len(message_text) > 1024:
+            print(f"[TELEGRAM POSTER] Caption too long ({len(message_text)} chars), truncating to 1000...", flush=True)
+            message_text = message_text[:1000] + "\n\n..."
+        elif len(message_text) > 4000:
             print(f"[TELEGRAM POSTER] Message too long ({len(message_text)} chars), truncating...", flush=True)
             message_text = message_text[:3900] + "\n\n... (полный текст слишком длинный)"
 
