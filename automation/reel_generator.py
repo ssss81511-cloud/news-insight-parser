@@ -12,6 +12,7 @@ import textwrap
 import io
 import requests
 import time
+import random
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -150,7 +151,7 @@ class ReelGenerator:
                 'query': query,
                 'orientation': 'square',
                 'size': 'large',
-                'per_page': 1
+                'per_page': 10  # Get 10 photos for randomization
             }
 
             response = requests.get(
@@ -164,7 +165,11 @@ class ReelGenerator:
                 data = response.json()
 
                 if data.get('photos') and len(data['photos']) > 0:
-                    photo = data['photos'][0]
+                    # Pick random photo from results
+                    photo = random.choice(data['photos'])
+                    photo_index = data['photos'].index(photo) + 1
+                    print(f"[PEXELS] 🎲 Selected random photo {photo_index}/{len(data['photos'])}", flush=True)
+
                     # Get large photo URL
                     photo_url = photo['src']['large2x']
 
