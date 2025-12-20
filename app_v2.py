@@ -409,24 +409,36 @@ def generate_content():
         tone = data.get('tone', 'professional')
         language = data.get('language', 'en')
 
+        print(f"[CONTENT GEN] Starting: source={source_type}, format={format_type}, language={language}, tone={tone}", flush=True)
+
         # Generate based on source type
         if source_type == 'cluster':
             cluster_id = data.get('cluster_id')
-            # Get posts from cluster (simplified - would need cluster storage)
+            print(f"[CONTENT GEN] Cluster mode: Getting top 15 posts for cluster {cluster_id}", flush=True)
+
             from storage.universal_models import UniversalPost
-            posts = db.session.query(UniversalPost).order_by(
+            # Get top posts with AI analysis
+            posts = db.session.query(UniversalPost).filter(
+                UniversalPost.ai_summary != None
+            ).order_by(
                 UniversalPost.importance_score.desc()
-            ).limit(10).all()
+            ).limit(15).all()
+
+            print(f"[CONTENT GEN] Found {len(posts)} posts with AI analysis", flush=True)
+
+            if not posts:
+                return jsonify({'status': 'error', 'message': 'Нет постов с AI анализом. Сначала запустите парсинг.'}), 400
 
             result = content_generator.generate_from_cluster(
                 posts, format_type, tone, language
             )
             result['source_type'] = 'cluster'
-            result['source_description'] = f'Cluster {cluster_id}'
+            result['source_description'] = f'Top {len(posts)} posts'
 
         elif source_type == 'trend':
             keyword = data.get('keyword')
             lookback_days = data.get('lookback_days', 7)
+            print(f"[CONTENT GEN] Trend mode: keyword='{keyword}', lookback={lookback_days} days", flush=True)
 
             result = content_generator.generate_from_trend(
                 keyword, lookback_days, format_type, tone, language
@@ -437,6 +449,7 @@ def generate_content():
         elif source_type == 'topic':
             keywords = data.get('keywords', [])
             lookback_days = data.get('lookback_days', 7)
+            print(f"[CONTENT GEN] Topic mode: keywords={keywords[:3]}, lookback={lookback_days} days", flush=True)
 
             result = content_generator.generate_from_topic(
                 keywords, lookback_days, format_type, tone, language
@@ -447,11 +460,16 @@ def generate_content():
         elif source_type == 'custom':
             # Custom post IDs
             post_ids = data.get('post_ids', [])
+            print(f"[CONTENT GEN] Custom mode: {len(post_ids)} post IDs", flush=True)
+
             from storage.universal_models import UniversalPost
 
             posts = db.session.query(UniversalPost).filter(
                 UniversalPost.id.in_(post_ids)
             ).all()
+
+            if not posts:
+                return jsonify({'status': 'error', 'message': 'Указанные посты не найдены'}), 400
 
             result = content_generator.generate_from_cluster(
                 posts, format_type, tone, language
@@ -459,12 +477,17 @@ def generate_content():
             result['source_type'] = 'custom'
             result['source_description'] = f'{len(post_ids)} selected posts'
         else:
+            print(f"[CONTENT GEN] ERROR: Invalid source_type={source_type}", flush=True)
             return jsonify({'status': 'error', 'message': 'Invalid source_type'}), 400
+
+        print(f"[CONTENT GEN] Generation successful! Content length: {len(str(result.get('content', '')))} chars", flush=True)
 
         # Save to database
         result['language'] = language
         result['tone'] = tone
         content_id = db.save_generated_content(result)
+
+        print(f"[CONTENT GEN] Saved to database with ID: {content_id}", flush=True)
 
         return jsonify({
             'status': 'success',
@@ -476,7 +499,7 @@ def generate_content():
     except Exception as e:
         import traceback
         error_msg = f"{e}\n{traceback.format_exc()}"
-        print(f"Content generation error: {error_msg}", flush=True)
+        print(f"[CONTENT GEN] ERROR: {error_msg}", flush=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

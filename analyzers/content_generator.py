@@ -228,9 +228,45 @@ class ContentGenerator:
 
     def _build_long_post_prompt(self, context: Dict, tone: str, language: str) -> str:
         """Build prompt for long-form post generation"""
-        lang_instruction = "in English" if language == 'en' else "на русском языке"
+        if language == 'ru':
+            tone_ru = {'professional': 'профессиональный', 'casual': 'неформальный', 'inspirational': 'вдохновляющий'}.get(tone, 'профессиональный')
 
-        prompt = f"""You are a professional content creator writing {lang_instruction}.
+            prompt = f"""Ты профессиональный контент-мейкер, пишущий посты на русском языке.
+
+На основе данных из {context['post_count']} постов про стартапы и технологии:
+
+Ключевые инсайты:
+{json.dumps(context['insights'][:10], indent=2, ensure_ascii=False)}
+
+Упомянутые технологии: {', '.join(context['technologies'])}
+Упомянутые компании: {', '.join(context['companies'])}
+
+Примеры постов:
+{json.dumps(context['samples'][:3], indent=2, ensure_ascii=False)}
+
+Создай увлекательный пост для LinkedIn/Instagram (1000-1500 символов) со следующей структурой:
+
+1. Хук (цепляющая первая строка)
+2. Контекст (что происходит в индустрии)
+3. Анализ (ключевые инсайты с конкретными примерами)
+4. Выводы (действенное заключение)
+5. 5-7 релевантных хэштегов
+
+Тон: {tone_ru}
+Включи конкретные примеры и данные из исходных постов.
+Сделай пост интересным и ценным для основателей стартапов и предпринимателей.
+
+ВАЖНО: Пиши ТОЛЬКО на русском языке!
+
+Верни ТОЛЬКО валидный JSON:
+{{
+    "title": "Короткий цепляющий заголовок",
+    "content": "Полный текст поста (1000-1500 символов)",
+    "hashtags": ["хэштег1", "хэштег2", ...],
+    "key_points": ["тезис1", "тезис2", "тезис3"]
+}}"""
+        else:
+            prompt = f"""You are a professional content creator writing in English.
 
 Based on this data from {context['post_count']} startup/tech posts:
 
@@ -267,9 +303,36 @@ Return ONLY valid JSON:
 
     def _build_reel_prompt(self, context: Dict, tone: str, language: str) -> str:
         """Build prompt for short-form reel/story generation"""
-        lang_instruction = "in English" if language == 'en' else "на русском языке"
+        if language == 'ru':
+            tone_ru = {'professional': 'профессиональный', 'casual': 'неформальный', 'inspirational': 'вдохновляющий'}.get(tone, 'профессиональный')
 
-        prompt = f"""You are a viral content creator writing {lang_instruction}.
+            prompt = f"""Ты создатель вирусного контента, пишущий на русском языке.
+
+На основе инсайтов из {context['post_count']} постов про технологии и стартапы:
+
+Топ инсайты:
+{json.dumps(context['insights'][:5], indent=2, ensure_ascii=False)}
+
+Технологии: {', '.join(context['technologies'][:5])}
+
+Создай короткий, цепляющий пост для Instagram Reels/TikTok (100-200 символов):
+
+Требования:
+- Мощный хук в первой строке (шокирующая статистика, вопрос или смелое заявление)
+- Один мощный инсайт
+- Призыв к действию или провокационная концовка
+- Тон: {tone_ru}
+- Используй эмодзи стратегически (2-3 максимум)
+
+ВАЖНО: Пиши ТОЛЬКО на русском языке!
+
+Верни ТОЛЬКО валидный JSON:
+{{
+    "content": "Полный текст для рилса (100-200 символов)",
+    "hashtags": ["хэштег1", "хэштег2", "хэштег3"]
+}}"""
+        else:
+            prompt = f"""You are a viral content creator writing in English.
 
 Based on insights from {context['post_count']} tech/startup posts:
 
@@ -297,9 +360,47 @@ Return ONLY valid JSON:
 
     def _build_thread_prompt(self, context: Dict, tone: str, language: str) -> str:
         """Build prompt for Twitter/X thread generation"""
-        lang_instruction = "in English" if language == 'en' else "на русском языке"
+        if language == 'ru':
+            tone_ru = {'professional': 'профессиональный', 'casual': 'неформальный', 'inspirational': 'вдохновляющий'}.get(tone, 'профессиональный')
 
-        prompt = f"""You are a Twitter/X thought leader writing {lang_instruction}.
+            prompt = f"""Ты лидер мнений в Twitter/X, пишущий на русском языке.
+
+На основе {context['post_count']} постов про стартапы и технологии:
+
+Инсайты:
+{json.dumps(context['insights'][:10], indent=2, ensure_ascii=False)}
+
+Технологии: {', '.join(context['technologies'])}
+Компании: {', '.join(context['companies'])}
+
+Создай тред для Twitter/X (5-7 твитов):
+
+Твит 1: Хук (удивительная статистика, смелое заявление или вопрос)
+Твиты 2-5: Ключевые инсайты с примерами (один инсайт на твит)
+Твит 6: Действенный вывод
+Твит 7: Призыв к действию + хэштеги
+
+Каждый твит: максимум 280 символов
+Тон: {tone_ru}
+Сделай тред увлекательным и достойным ретвита
+
+ВАЖНО: Пиши ТОЛЬКО на русском языке!
+
+Верни ТОЛЬКО валидный JSON:
+{{
+    "tweets": [
+        "Текст твита 1",
+        "Текст твита 2",
+        "Текст твита 3",
+        "Текст твита 4",
+        "Текст твита 5",
+        "Текст твита 6",
+        "Текст твита 7"
+    ],
+    "hashtags": ["хэштег1", "хэштег2", "хэштег3"]
+}}"""
+        else:
+            prompt = f"""You are a Twitter/X thought leader writing in English.
 
 Based on {context['post_count']} startup/tech posts:
 
@@ -338,19 +439,26 @@ Return ONLY valid JSON:
 
     def _call_ai(self, prompt: str) -> str:
         """Call Groq API to generate content"""
+        import random
+        import time
+
+        # Add randomness for variability
+        random_seed = int(time.time() * 1000) % 10000
+
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert content creator. Return only valid JSON."
+                    "content": f"You are an expert content creator. Return only valid JSON. Seed: {random_seed}"
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.8,  # Higher creativity for content generation
+            temperature=1.2,  # Higher creativity for more variability (0.8 -> 1.2)
+            top_p=0.95,  # Nucleus sampling for diverse outputs
             max_tokens=2000
         )
 
