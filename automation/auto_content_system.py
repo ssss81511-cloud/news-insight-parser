@@ -88,7 +88,7 @@ class AutoContentSystem:
             'content_format': 'long_post',
             'content_language': 'ru',
             'content_tone': 'professional',
-            'reel_aspect_ratio': 'reel',
+            'reel_aspect_ratio': 'square',
             'reel_style': 'modern',
             'enable_reel': True,
             'enable_telegram': True,

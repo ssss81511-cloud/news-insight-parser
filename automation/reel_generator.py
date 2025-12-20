@@ -148,7 +148,7 @@ class ReelGenerator:
 
             params = {
                 'query': query,
-                'orientation': 'portrait',
+                'orientation': 'square',
                 'size': 'large',
                 'per_page': 1
             }
