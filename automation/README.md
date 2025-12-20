@@ -52,31 +52,78 @@ if topic:
 }
 ```
 
-### 2. TelegramPoster (Planned)
+### 2. TelegramPoster (✓ Implemented)
 
 Posts generated content to Telegram channels.
 
-**Planned Features:**
-- Async posting to multiple channels
-- Message formatting for Telegram
-- Media attachment support (images, videos)
-- Error handling and retry logic
-- Rate limiting compliance
+**Features:**
+- ✓ Async posting with proper error handling
+- ✓ Automatic retry logic with exponential backoff
+- ✓ Rate limiting compliance (handles RetryAfter)
+- ✓ HTML/Markdown message formatting
+- ✓ Media support (images)
+- ✓ Thread support (multiple messages)
+- ✓ Message length handling (4096 char limit)
+- ✓ Connection testing
 
-**Planned Usage:**
+**Usage:**
 ```python
 from automation.telegram_poster import TelegramPoster
+import asyncio
 
+# Initialize
 poster = TelegramPoster(
     bot_token=TELEGRAM_BOT_TOKEN,
-    channel_id=TELEGRAM_CHANNEL_ID
+    channel_id=TELEGRAM_CHANNEL_ID,
+    max_retries=3
 )
 
-# Post content
+# Test connection
+is_connected = await poster.test_connection()
+
+# Post single message
 result = await poster.post_content(
-    content=generated_content,
-    media_path=None  # Optional image/video
+    content={
+        'title': 'Post Title',
+        'content': 'Post content here',
+        'hashtags': ['#AI', '#Tech'],
+        'format_type': 'long_post'
+    },
+    media_path='path/to/image.jpg'  # Optional
 )
+
+# Post thread (multiple messages)
+result = await poster.post_content(
+    content={
+        'content': [
+            'First tweet',
+            'Second tweet',
+            'Third tweet'
+        ],
+        'hashtags': ['#Thread'],
+        'format_type': 'thread'
+    }
+)
+
+# Synchronous wrapper (for Flask routes)
+from automation.telegram_poster import sync_post
+
+result = sync_post(
+    bot_token=TELEGRAM_BOT_TOKEN,
+    channel_id=TELEGRAM_CHANNEL_ID,
+    content=generated_content
+)
+```
+
+**Result Structure:**
+```python
+{
+    'success': bool,
+    'message_id': int,           # Telegram message ID
+    'message_ids': List[int],    # For threads
+    'error': str or None,
+    'posted_at': datetime
+}
 ```
 
 ### 3. ReelGenerator (Planned)
