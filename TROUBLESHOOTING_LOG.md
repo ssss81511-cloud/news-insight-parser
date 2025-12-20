@@ -372,7 +372,53 @@ return self.content_generator.generate_from_cluster(
 )
 ```
 
-**Статус:** ⏳ Исправляю сейчас
+**Статус:** ✅ Исправлено в следующем коммите
+
+---
+
+### Ошибка #8: Telegram connection pool timeout
+**Время обнаружения:** 2025-12-21 (после исправления ошибки #7)
+**Файл:** `automation/telegram_poster.py:44`
+
+**Симптомы:**
+```json
+{
+  "error": "Telegram posting failed: Pool timeout: All connections in the connection pool are occupied."
+}
+```
+
+**Причина:**
+```python
+# automation/telegram_poster.py:44
+self.bot = Bot(token=bot_token)  # ← Default httpx client
+# Default connection_pool_size = 1
+# Default pool_timeout = 5.0 seconds
+```
+
+python-telegram-bot использует httpx под капотом.
+По умолчанию:
+- `connection_pool_size=1` - только 1 соединение
+- `pool_timeout=5.0` - 5 секунд ожидания
+
+При отправке фото + текста нужно минимум 2 соединения.
+
+**Решение:**
+```python
+# automation/telegram_poster.py:48
+from telegram.request import HTTPXRequest
+
+request = HTTPXRequest(
+    connection_pool_size=20,  # Увеличено с 1 до 20
+    connect_timeout=30.0,
+    read_timeout=30.0,
+    write_timeout=30.0,
+    pool_timeout=30.0  # Увеличено с 5.0 до 30.0
+)
+
+self.bot = Bot(token=bot_token, request=request)
+```
+
+**Статус:** ✅ Исправлено в следующем коммите
 
 ---
 

@@ -11,7 +11,9 @@ import json
 from telegram import Bot
 from telegram.error import TelegramError, NetworkError, RetryAfter
 from telegram.constants import ParseMode
+from telegram.request import HTTPXRequest
 import time
+import httpx
 
 
 class TelegramPoster:
@@ -41,7 +43,17 @@ class TelegramPoster:
         if not channel_id:
             raise ValueError("channel_id is required")
 
-        self.bot = Bot(token=bot_token)
+        # Configure httpx with larger connection pool and longer timeout
+        # This fixes "Pool timeout: All connections in the connection pool are occupied" error
+        request = HTTPXRequest(
+            connection_pool_size=20,  # Increase from default 1
+            connect_timeout=30.0,
+            read_timeout=30.0,
+            write_timeout=30.0,
+            pool_timeout=30.0  # Increase pool timeout
+        )
+
+        self.bot = Bot(token=bot_token, request=request)
         self.channel_id = channel_id
         self.max_retries = max_retries
 
