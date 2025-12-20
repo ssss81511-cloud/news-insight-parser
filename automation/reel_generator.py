@@ -105,71 +105,68 @@ class ReelGenerator:
 
         print(f"[REEL GENERATOR] Initialized: Photos={use_ai}, Unsplash={'✅' if unsplash_key else '❌ (using fallback)'}", flush=True)
 
-    def _fetch_stock_photo(self, keywords: List[str]) -> Optional[Image.Image]:
+    def _generate_gradient_background(self, keywords: List[str], width: int, height: int) -> Image.Image:
         """
-        Fetch professional stock photo from Unsplash
+        Generate beautiful gradient background based on keywords
 
         Args:
-            keywords: List of keywords for search
+            keywords: Keywords to determine color palette
+            width: Image width
+            height: Image height
 
         Returns:
-            PIL Image object or None if failed
+            PIL Image with gradient
         """
-        # Build search query from keywords
-        query = ', '.join(keywords[:3]) if keywords else 'technology, business, abstract'
+        import hashlib
 
-        print(f"[STOCK PHOTO] Fetching from Unsplash: {query}", flush=True)
+        # Color palettes (modern, vibrant gradients)
+        palettes = [
+            # Tech/AI themes
+            [(99, 102, 241), (139, 92, 246)],      # Indigo to Purple
+            [(59, 130, 246), (147, 51, 234)],      # Blue to Purple
+            [(16, 185, 129), (59, 130, 246)],      # Emerald to Blue
 
-        try:
-            # Unsplash API params
-            params = {
-                'query': query,
-                'orientation': 'portrait',  # For reels (9:16)
-                'content_filter': 'high',   # Safe for work
-                'count': 1
-            }
+            # Business/Professional
+            [(15, 23, 42), (99, 102, 241)],        # Dark to Indigo
+            [(30, 58, 138), (59, 130, 246)],       # Navy to Blue
 
-            # Add API key if available (optional - works without but has rate limits)
-            headers = {}
-            if self.unsplash_key:
-                headers['Authorization'] = f'Client-ID {self.unsplash_key}'
+            # Creative/Modern
+            [(236, 72, 153), (239, 68, 68)],       # Pink to Red
+            [(251, 146, 60), (239, 68, 68)],       # Orange to Red
+            [(34, 211, 238), (139, 92, 246)],      # Cyan to Purple
 
-            response = requests.get(
-                self.unsplash_api_url,
-                params=params,
-                headers=headers if headers else None,
-                timeout=10
-            )
+            # Elegant
+            [(88, 28, 135), (219, 39, 119)],       # Purple to Pink
+            [(124, 58, 237), (236, 72, 153)],      # Violet to Pink
+        ]
 
-            if response.status_code == 200:
-                data = response.json()
+        # Select palette based on keywords hash (deterministic)
+        keyword_str = ''.join(keywords[:3]) if keywords else 'default'
+        hash_val = int(hashlib.md5(keyword_str.encode()).hexdigest(), 16)
+        palette_idx = hash_val % len(palettes)
+        color1, color2 = palettes[palette_idx]
 
-                # Get image URL (regular size - good quality, reasonable size)
-                if isinstance(data, list) and len(data) > 0:
-                    photo_url = data[0]['urls']['regular']
-                elif isinstance(data, dict):
-                    photo_url = data['urls']['regular']
-                else:
-                    print(f"[STOCK PHOTO] Unexpected response format", flush=True)
-                    return None
+        print(f"[GRADIENT] Creating gradient: {color1} → {color2}", flush=True)
 
-                # Download image
-                img_response = requests.get(photo_url, timeout=10)
-                if img_response.status_code == 200:
-                    image = Image.open(io.BytesIO(img_response.content))
-                    print(f"[STOCK PHOTO] ✅ Downloaded: {image.size}", flush=True)
-                    return image
-                else:
-                    print(f"[STOCK PHOTO] Failed to download image", flush=True)
-                    return None
+        # Create gradient image
+        img = Image.new('RGB', (width, height))
+        draw = ImageDraw.Draw(img)
 
-            else:
-                print(f"[STOCK PHOTO] API error {response.status_code}: {response.text[:200]}", flush=True)
-                return None
+        # Draw gradient
+        for y in range(height):
+            # Calculate blend ratio
+            ratio = y / height
 
-        except Exception as e:
-            print(f"[STOCK PHOTO] Exception: {e}", flush=True)
-            return None
+            # Interpolate colors
+            r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
+            g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
+            b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
+
+            # Draw line
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+        print(f"[GRADIENT] ✅ Generated: {width}x{height}", flush=True)
+        return img
 
     def _create_prompt_from_content(self, title: str, keywords: List[str]) -> str:
         """
@@ -227,31 +224,23 @@ class ReelGenerator:
         width, height = self.ASPECT_RATIOS.get(aspect_ratio, self.ASPECT_RATIOS['reel'])
         colors = self.COLOR_SCHEMES.get(style, self.COLOR_SCHEMES['modern'])
 
-        # Use stock photos if enabled
+        # Use gradient backgrounds if enabled
         if self.use_ai:
-            print(f"[REEL] ✅ Stock photos ENABLED - fetching professional image", flush=True)
-            # Use keywords (hashtags) for photo search
-            search_keywords = keywords if keywords else []
-            print(f"[REEL] 🏷️  Keywords for search: {search_keywords}", flush=True)
+            print(f"[REEL] ✅ Gradient backgrounds ENABLED - generating unique design", flush=True)
+            # Use keywords (hashtags) to select color palette
+            gradient_keywords = keywords if keywords else []
+            print(f"[REEL] 🎨 Keywords for palette: {gradient_keywords}", flush=True)
 
-            stock_image = self._fetch_stock_photo(search_keywords)
+            # Generate gradient background
+            img = self._generate_gradient_background(gradient_keywords, width, height)
 
-            if stock_image:
-                # Resize stock photo to target dimensions
-                img = stock_image.resize((width, height), Image.Resampling.LANCZOS)
+            # Add subtle overlay for text contrast
+            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+            img = img.convert('RGBA')
+            img = Image.alpha_composite(img, overlay)
+            img = img.convert('RGB')
 
-                # Add semi-transparent overlay for text readability
-                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
-                img = img.convert('RGBA')
-                img = Image.alpha_composite(img, overlay)
-                img = img.convert('RGB')
-
-                print(f"[REEL] ✅ Using stock photo background", flush=True)
-            else:
-                # Fallback to basic colored background if fetch fails
-                print(f"[REEL] ❌ Stock photo fetch FAILED - using colored fallback", flush=True)
-                print(f"[REEL] ⚠️  Check logs above for error details", flush=True)
-                img = Image.new('RGB', (width, height), colors['background'])
+            print(f"[REEL] ✅ Using gradient background", flush=True)
         else:
             # Create basic colored background
             print(f"[REEL] ⚠️  AI generation DISABLED - using colored background", flush=True)
