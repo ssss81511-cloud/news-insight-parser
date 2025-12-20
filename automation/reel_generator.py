@@ -9,6 +9,9 @@ from typing import Optional, Dict, List, Tuple
 from datetime import datetime
 import os
 import textwrap
+import io
+import requests
+import time
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -80,20 +83,104 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels'):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
+            use_ai: Use AI image generation (Stable Diffusion) instead of basic text overlay
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
 
         self.output_dir = output_dir
+        self.use_ai = use_ai
         os.makedirs(output_dir, exist_ok=True)
 
-        print(f"[REEL GENERATOR] Initialized with output dir: {output_dir}", flush=True)
+        # Hugging Face Inference API endpoint for Stable Diffusion
+        self.hf_api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+        # Free API - no key needed, but has rate limits
+
+        print(f"[REEL GENERATOR] Initialized with output dir: {output_dir}, AI: {use_ai}", flush=True)
+
+    def _generate_ai_image(self, prompt: str, retries: int = 3) -> Optional[Image.Image]:
+        """
+        Generate image using Stable Diffusion via Hugging Face Inference API
+
+        Args:
+            prompt: Text prompt for image generation
+            retries: Number of retries if API is loading
+
+        Returns:
+            PIL Image object or None if failed
+        """
+        print(f"[AI IMAGE] Generating with prompt: {prompt[:100]}...", flush=True)
+
+        headers = {"Content-Type": "application/json"}
+        payload = {"inputs": prompt}
+
+        for attempt in range(retries):
+            try:
+                response = requests.post(self.hf_api_url, headers=headers, json=payload, timeout=60)
+
+                if response.status_code == 200:
+                    # Success - return image
+                    image = Image.open(io.BytesIO(response.content))
+                    print(f"[AI IMAGE] Generated successfully: {image.size}", flush=True)
+                    return image
+
+                elif response.status_code == 503:
+                    # Model is loading - wait and retry
+                    try:
+                        error_data = response.json()
+                        wait_time = error_data.get('estimated_time', 20)
+                    except:
+                        wait_time = 20
+
+                    print(f"[AI IMAGE] Model loading... waiting {wait_time}s (attempt {attempt+1}/{retries})", flush=True)
+                    time.sleep(wait_time)
+                    continue
+
+                else:
+                    print(f"[AI IMAGE] Error {response.status_code}: {response.text[:200]}", flush=True)
+                    return None
+
+            except Exception as e:
+                print(f"[AI IMAGE] Exception: {e}", flush=True)
+                if attempt < retries - 1:
+                    time.sleep(5)
+                    continue
+                return None
+
+        return None
+
+    def _create_prompt_from_content(self, title: str, keywords: List[str]) -> str:
+        """
+        Create Stable Diffusion prompt from content
+
+        Args:
+            title: Content title
+            keywords: Topic keywords
+
+        Returns:
+            Optimized prompt for Stable Diffusion
+        """
+        # Create engaging prompt for tech/startup content
+        topic = ', '.join(keywords[:3]) if keywords else 'technology'
+
+        prompts = [
+            f"Professional modern tech illustration about {topic}, minimalist design, vibrant colors, high quality, digital art",
+            f"Futuristic {topic} concept art, sleek technology, innovation, professional lighting, 4k quality",
+            f"Abstract technology visualization for {topic}, modern design, gradient background, professional",
+            f"Clean minimal tech graphic about {topic}, professional illustration, vibrant gradient, modern style",
+        ]
+
+        # Rotate through prompts based on current time
+        import hashlib
+        index = int(hashlib.md5(title.encode()).hexdigest(), 16) % len(prompts)
+
+        return prompts[index]
 
     def generate_reel(
         self,
@@ -116,14 +203,36 @@ class ReelGenerator:
         Returns:
             Path to generated image file
         """
-        print(f"[REEL GENERATOR] Generating {aspect_ratio} reel with {style} style", flush=True)
+        print(f"[REEL GENERATOR] Generating {aspect_ratio} reel with {style} style, AI: {self.use_ai}", flush=True)
 
         # Get dimensions and colors
         width, height = self.ASPECT_RATIOS.get(aspect_ratio, self.ASPECT_RATIOS['reel'])
         colors = self.COLOR_SCHEMES.get(style, self.COLOR_SCHEMES['modern'])
 
-        # Create image
-        img = Image.new('RGB', (width, height), colors['background'])
+        # Use AI image generation if enabled
+        if self.use_ai:
+            prompt = self._create_prompt_from_content(title, key_points[:3] if key_points else [])
+            ai_image = self._generate_ai_image(prompt)
+
+            if ai_image:
+                # Resize AI image to target dimensions
+                img = ai_image.resize((width, height), Image.Resampling.LANCZOS)
+
+                # Add semi-transparent overlay for text readability
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
+                img = img.convert('RGBA')
+                img = Image.alpha_composite(img, overlay)
+                img = img.convert('RGB')
+
+                print(f"[REEL] Using AI-generated background", flush=True)
+            else:
+                # Fallback to basic colored background if AI fails
+                print(f"[REEL] AI generation failed, using fallback", flush=True)
+                img = Image.new('RGB', (width, height), colors['background'])
+        else:
+            # Create basic colored background
+            img = Image.new('RGB', (width, height), colors['background'])
+
         draw = ImageDraw.Draw(img)
 
         # Load fonts with proper Linux font fallback

@@ -535,7 +535,60 @@ def _get_font(self, size):
     return ImageFont.load_default()
 ```
 
-**Статус:** ⏳ Исправляю сейчас
+**Статус:** ✅ Исправлено в коммите 40e1135
+
+---
+
+### Ошибка #11: Низкое качество картинок (только текст на цветном фоне)
+**Время обнаружения:** 2025-12-21 (после исправления fonts)
+**Файл:** `automation/reel_generator.py`
+
+**Симптомы:**
+- Картинки выглядят непрофессионально
+- Просто цветной фон + текст
+- Нет визуальной привлекательности
+
+**Причина:**
+```python
+# БЫЛО:
+img = Image.new('RGB', (1080, 1920), background_color)
+draw.text((x, y), title, fill=white, font=font)
+# Результат: скучный цветной прямоугольник
+```
+
+**Решение:**
+Интеграция Stable Diffusion через Hugging Face Inference API (БЕСПЛАТНО!):
+
+```python
+def _generate_ai_image(self, prompt: str) -> Optional[Image.Image]:
+    """Generate image using Stable Diffusion"""
+    api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+    response = requests.post(api_url, json={"inputs": prompt})
+
+    if response.status_code == 200:
+        return Image.open(io.BytesIO(response.content))
+
+    return None
+
+# В generate_reel():
+if self.use_ai:
+    prompt = f"Professional tech illustration about {topic}, minimalist, vibrant"
+    ai_image = self._generate_ai_image(prompt)
+
+    if ai_image:
+        img = ai_image.resize((1080, 1920))
+        # Добавляем полупрозрачный overlay для читаемости текста
+        overlay = Image.new('RGBA', (1080, 1920), (0, 0, 0, 120))
+        img = Image.alpha_composite(img, overlay)
+```
+
+**Результат:**
+- Уникальные AI-сгенерированные изображения для каждого поста
+- Профессиональное качество
+- Бесплатно через Hugging Face API
+- Fallback к цветному фону если AI не работает
+
+**Статус:** ✅ Реализовано в следующем коммите
 
 ---
 
