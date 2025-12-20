@@ -485,7 +485,10 @@
             updateProgress(10, 1, 'active');
 
             try {
-                const response = await fetch('/api/parse', { method: 'POST' });
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
                 const data = await response.json();
 
                 updateProgress(100, 1, 'completed');
@@ -503,7 +506,10 @@
             updateProgress(10, 2, 'active');
 
             try {
-                const response = await fetch('/api/run-insights', { method: 'POST' });
+                const response = await fetch('/api/run-insights', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
                 const data = await response.json();
 
                 updateProgress(100, 2, 'completed');
@@ -521,7 +527,10 @@
             updateProgress(10, 3, 'active');
 
             try {
-                const response = await fetch('/api/auto-generate', { method: 'POST' });
+                const response = await fetch('/api/auto-generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
                 const data = await response.json();
 
                 if (data.status === 'success') {
