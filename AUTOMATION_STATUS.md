@@ -1,0 +1,451 @@
+# Automation System Implementation Status
+
+## Overview
+
+This document tracks the implementation of the automated content generation and posting system for News Insight Parser.
+
+**Last Updated:** 2025-12-20
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Automation System                      │
+│                                                             │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐ │
+│  │   Scheduler  │───>│AutoContent   │───>│  Telegram    │ │
+│  │ (APScheduler)│    │   System     │    │   Poster     │ │
+│  └──────────────┘    └──────────────┘    └──────────────┘ │
+│                             │                              │
+│                             v                              │
+│                      ┌──────────────┐                      │
+│                      │    Topic     │                      │
+│                      │  Selector    │                      │
+│                      └──────────────┘                      │
+│                             │                              │
+│                             v                              │
+│                      ┌──────────────┐                      │
+│                      │   Content    │                      │
+│                      │  Generator   │                      │
+│                      └──────────────┘                      │
+│                             │                              │
+│                             v                              │
+│                      ┌──────────────┐                      │
+│                      │     Reel     │                      │
+│                      │  Generator   │                      │
+│                      └──────────────┘                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Implementation Status
+
+### Phase 1: Topic Selection ✓ COMPLETE
+
+**Component:** TopicSelector
+**Status:** ✓ Implemented and Tested
+**Files:**
+- `automation/topic_selector.py` - Main component
+- `automation/__init__.py` - Package initialization
+- `automation/README.md` - Documentation
+- `storage/universal_models.py` - Added UsedTopic model
+- `storage/universal_database.py` - Added UsedTopic methods
+- `test_topic_selector.py` - Test suite
+- `migrate_add_used_topics.py` - Database migration
+
+**Features Implemented:**
+- [x] Selects unique topics from database
+- [x] Prevents repetition within configurable time window (default: 30 days)
+- [x] Prefers trending topics when available
+- [x] Tracks usage in database (used_topics table)
+- [x] Falls back to ad-hoc topic generation
+- [x] Comprehensive error handling
+- [x] Full test coverage
+
+**Database Changes:**
+- Added `used_topics` table with columns:
+  - `id` - Primary key
+  - `topic_id` - Reference to topics table (nullable)
+  - `keywords` - JSON array of keywords
+  - `keywords_hash` - SHA-256 hash for deduplication
+  - `used_at` - Timestamp of usage
+  - `content_id` - Reference to generated_content
+  - `post_count` - Number of posts in topic
+  - `source_type` - 'topic', 'trend', or 'cluster'
+
+**API:**
+```python
+selector.select_next_topic(exclude_days=30, prefer_trending=True, min_posts=3)
+selector.mark_topic_used(topic, content_id)
+selector.get_usage_stats(days_back=30)
+```
+
+**Testing:**
+```bash
+python test_topic_selector.py
+# Results: All tests passing ✓
+```
+
+### Phase 2: Telegram Posting ⏳ PLANNED
+
+**Component:** TelegramPoster
+**Status:** ⏳ Not Started
+**Estimated Complexity:** Medium
+**Dependencies:**
+- `python-telegram-bot` library
+- Telegram Bot API token
+- Channel ID
+
+**Planned Features:**
+- Async posting to Telegram channels
+- Message formatting (Markdown/HTML)
+- Media attachment support
+- Error handling and retries
+- Rate limiting compliance
+
+**Planned Files:**
+- `automation/telegram_poster.py`
+- `test_telegram_poster.py`
+
+**Environment Variables Needed:**
+```bash
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHANNEL_ID=@your_channel
+```
+
+### Phase 3: Reel Generation ⏳ PLANNED
+
+**Component:** ReelGenerator
+**Status:** ⏳ Not Started
+**Estimated Complexity:** Medium-High
+**Dependencies:**
+- `Pillow` (PIL) for image generation
+- Optional: `moviepy` for video generation
+
+**Planned Features:**
+- Text-to-image using templates
+- Multiple aspect ratios (1:1, 9:16, 16:9)
+- Customizable styles and themes
+- Key points overlay
+- Branding elements
+
+**Planned Files:**
+- `automation/reel_generator.py`
+- `automation/templates/` - Image templates
+- `test_reel_generator.py`
+
+### Phase 4: Auto Content System ⏳ PLANNED
+
+**Component:** AutoContentSystem
+**Status:** ⏳ Not Started
+**Estimated Complexity:** High
+**Dependencies:** All previous components
+
+**Planned Features:**
+- Orchestrates entire workflow
+- Error handling and recovery
+- Performance monitoring
+- Configurable schedules
+- Status tracking
+
+**Planned Files:**
+- `automation/auto_content_system.py`
+- Integration in `app_v2.py`
+- `test_automation_flow.py`
+
+**Workflow:**
+1. TopicSelector selects unique topic
+2. ContentGenerator creates post
+3. Database saves content
+4. TopicSelector marks topic as used
+5. ReelGenerator creates image
+6. TelegramPoster posts to channel
+7. Database marks as published
+
+### Phase 5: Scheduler Integration ⏳ PLANNED
+
+**Component:** APScheduler Integration
+**Status:** ⏳ Not Started
+**Estimated Complexity:** Low
+**Dependencies:** Phase 4 complete
+
+**Planned Features:**
+- Cron-based scheduling
+- Daily automated posting
+- Configurable schedule
+- Background job management
+
+**Integration Point:** `app_v2.py`
+
+**Example Configuration:**
+```python
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+scheduler = AsyncIOScheduler()
+scheduler.add_job(
+    auto_system.generate_and_post,
+    'cron',
+    hour=9,      # Daily at 9:00 AM
+    minute=0
+)
+scheduler.start()
+```
+
+## Current State
+
+### ✓ What Works Now
+
+1. **Topic Selection**
+   - Unique topic selection algorithm
+   - Usage tracking in database
+   - Fallback to ad-hoc generation
+   - Full test coverage
+
+2. **Manual Content Generation**
+   - Can manually select topic using TopicSelector
+   - Generate content using ContentGenerator
+   - Save to database
+   - Mark topic as used
+
+3. **Database Infrastructure**
+   - All tables created
+   - Indexes optimized
+   - Migration scripts ready
+
+### ⏳ What's Next
+
+**Immediate Next Steps:**
+1. Implement TelegramPoster component
+2. Set up Telegram bot credentials
+3. Test posting to Telegram
+4. Implement ReelGenerator
+5. Build AutoContentSystem orchestrator
+6. Integrate scheduler
+
+**Timeline Estimate:**
+- TelegramPoster: 2-4 hours
+- ReelGenerator: 4-6 hours
+- AutoContentSystem: 3-5 hours
+- Scheduler Integration: 1-2 hours
+- Testing & Refinement: 2-4 hours
+**Total:** ~12-21 hours of development
+
+## Usage Examples
+
+### Current: Manual Topic-Based Generation
+
+```python
+from storage.universal_database import UniversalDatabaseManager
+from automation.topic_selector import TopicSelector
+from analyzers.content_generator import ContentGenerator
+import os
+
+# Setup
+db = UniversalDatabaseManager(os.getenv('DATABASE_URL'))
+selector = TopicSelector(db)
+generator = ContentGenerator(api_key=os.getenv('GROQ_API_KEY'))
+
+# Select unique topic
+topic = selector.select_next_topic(exclude_days=30)
+
+if topic:
+    # Get posts
+    from storage.universal_models import UniversalPost
+    posts = db.session.query(UniversalPost).filter(
+        UniversalPost.id.in_(topic['posts'])
+    ).all()
+
+    # Generate content
+    content = generator.generate_from_topic(
+        posts=posts,
+        format_type='long_post',
+        language='ru',
+        tone='professional'
+    )
+
+    # Save
+    content_id = db.save_generated_content({
+        'format': 'long_post',
+        'language': 'ru',
+        'content': content['content'],
+        'hashtags': content.get('hashtags', []),
+        'source_type': 'topic',
+        'source_posts': topic['posts']
+    })
+
+    # Mark as used
+    selector.mark_topic_used(topic, content_id)
+```
+
+### Future: Fully Automated
+
+```python
+from automation.auto_content_system import AutoContentSystem
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# Initialize system (one-time setup)
+auto_system = AutoContentSystem(
+    db_manager=db,
+    content_generator=generator,
+    topic_selector=selector,
+    telegram_poster=poster,
+    reel_generator=reel_gen
+)
+
+# Schedule daily posting
+scheduler = AsyncIOScheduler()
+scheduler.add_job(
+    auto_system.generate_and_post,
+    'cron',
+    hour=9,
+    minute=0
+)
+scheduler.start()
+
+# System will now automatically:
+# 1. Select unique topic every day at 9 AM
+# 2. Generate content in Russian
+# 3. Create reel image
+# 4. Post to Telegram
+# 5. Mark topic as used
+# 6. Never repeat topics within 30 days
+```
+
+## Testing
+
+### Current Tests
+
+```bash
+# Test TopicSelector
+python test_topic_selector.py
+
+# Test database migration
+python migrate_add_used_topics.py
+```
+
+### Future Tests
+
+```bash
+# Test TelegramPoster
+python test_telegram_poster.py
+
+# Test ReelGenerator
+python test_reel_generator.py
+
+# Test full automation flow
+python test_automation_flow.py
+```
+
+## Configuration
+
+### Required Environment Variables
+
+```bash
+# Already configured
+DATABASE_URL=postgresql://user:pass@host/db
+GROQ_API_KEY=your_groq_key
+
+# Needed for automation
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHANNEL_ID=@your_channel
+
+# Optional settings
+TOPIC_EXCLUDE_DAYS=30
+CONTENT_FORMAT=long_post
+CONTENT_LANGUAGE=ru
+CONTENT_TONE=professional
+AUTO_GENERATE_ENABLED=true
+AUTO_GENERATE_SCHEDULE='0 9 * * *'  # Cron: Daily at 9 AM
+```
+
+### Getting Telegram Credentials
+
+1. Create a bot with @BotFather on Telegram
+2. Get the bot token
+3. Add bot to your channel as admin
+4. Get channel ID (format: @channelname or -100xxxxxxxxxx)
+
+## Files Added/Modified
+
+### New Files
+- `automation/__init__.py`
+- `automation/topic_selector.py`
+- `automation/README.md`
+- `test_topic_selector.py`
+- `migrate_add_used_topics.py`
+- `AUTOMATION_STATUS.md` (this file)
+
+### Modified Files
+- `storage/universal_models.py` - Added UsedTopic model
+- `storage/universal_database.py` - Added UsedTopic methods
+
+### Files to Add (Future)
+- `automation/telegram_poster.py`
+- `automation/reel_generator.py`
+- `automation/auto_content_system.py`
+- `test_telegram_poster.py`
+- `test_reel_generator.py`
+- `test_automation_flow.py`
+
+## Deployment Notes
+
+### Current Deployment Steps
+
+1. Commit changes to git
+2. Push to Render
+3. Run migration: `python migrate_add_used_topics.py`
+4. Test TopicSelector: `python test_topic_selector.py`
+
+### Future Deployment Steps
+
+1. Set environment variables in Render
+2. Install additional dependencies (if needed)
+3. Deploy code
+4. Run migrations
+5. Test each component
+6. Enable scheduler in app_v2.py
+7. Monitor logs
+
+## Success Metrics
+
+### Phase 1 (Current) ✓
+- [x] TopicSelector selects topics without errors
+- [x] Topics are tracked in database
+- [x] No topic repetition within 30 days
+- [x] All tests pass
+
+### Phase 2 (Future)
+- [ ] Telegram posts successfully
+- [ ] Messages formatted correctly
+- [ ] Error handling works
+- [ ] Rate limits respected
+
+### Phase 3 (Future)
+- [ ] Reels generated successfully
+- [ ] Images look professional
+- [ ] Multiple formats supported
+- [ ] Templates customizable
+
+### Phase 4 (Future)
+- [ ] Full workflow runs end-to-end
+- [ ] Errors handled gracefully
+- [ ] Content quality maintained
+- [ ] System recovers from failures
+
+### Phase 5 (Future)
+- [ ] Scheduler runs reliably
+- [ ] Daily posts successful
+- [ ] No manual intervention needed
+- [ ] Monitoring/alerts working
+
+## Conclusion
+
+**Phase 1 (Topic Selection) is complete and tested.** The foundation for automated content generation is ready. The next step is implementing TelegramPoster to enable actual posting, followed by ReelGenerator for visual content, and finally AutoContentSystem to orchestrate everything.
+
+The system is designed with:
+- Dependency injection for testability
+- Loose coupling between components
+- Comprehensive error handling
+- Clear separation of concerns
+- Easy extensibility
+
+Ready to proceed with Phase 2: TelegramPoster implementation.

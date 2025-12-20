@@ -4,11 +4,12 @@ Enhanced database manager with deduplication and universal models
 from sqlalchemy.orm import Session, sessionmaker
 from storage.universal_models import (
     UniversalPost, UniversalComment, DuplicateGroup,
-    EnhancedSignal, ParserRun, init_universal_db
+    EnhancedSignal, ParserRun, UsedTopic, init_universal_db
 )
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict
 import json
+import hashlib
 from difflib import SequenceMatcher
 
 
@@ -607,6 +608,122 @@ class UniversalDatabaseManager:
             self.session.rollback()
             print(f"Error deleting content: {e}")
             return False
+
+    # UsedTopic management methods
+    def mark_topic_as_used(self, keywords: List[str], content_id: int = None,
+                          topic_id: int = None, post_count: int = 0,
+                          source_type: str = 'topic') -> int:
+        """
+        Mark a topic as used for content generation
+
+        Args:
+            keywords: List of keywords defining the topic
+            content_id: ID of generated content (if any)
+            topic_id: Topic ID from analytics (if applicable)
+            post_count: Number of posts in this topic
+            source_type: Type of source ('topic', 'trend', 'cluster')
+
+        Returns:
+            ID of UsedTopic record
+        """
+        try:
+            # Create hash of keywords for duplicate detection
+            keywords_sorted = sorted([k.lower().strip() for k in keywords])
+            keywords_str = '|||'.join(keywords_sorted)
+            keywords_hash = hashlib.sha256(keywords_str.encode()).hexdigest()
+
+            used_topic = UsedTopic(
+                topic_id=topic_id,
+                keywords=json.dumps(keywords),
+                keywords_hash=keywords_hash,
+                content_id=content_id,
+                post_count=post_count,
+                source_type=source_type,
+                used_at=datetime.now(timezone.utc)
+            )
+
+            self.session.add(used_topic)
+            self.session.commit()
+            return used_topic.id
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error marking topic as used: {e}")
+            return 0
+
+    def is_topic_used_recently(self, keywords: List[str], exclude_days: int = 30) -> bool:
+        """
+        Check if topic was used recently
+
+        Args:
+            keywords: List of keywords defining the topic
+            exclude_days: Number of days to look back (default: 30)
+
+        Returns:
+            True if topic was used within exclude_days, False otherwise
+        """
+        try:
+            # Create hash of keywords
+            keywords_sorted = sorted([k.lower().strip() for k in keywords])
+            keywords_str = '|||'.join(keywords_sorted)
+            keywords_hash = hashlib.sha256(keywords_str.encode()).hexdigest()
+
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=exclude_days)
+
+            # Check if this topic was used recently
+            used = self.session.query(UsedTopic).filter(
+                UsedTopic.keywords_hash == keywords_hash,
+                UsedTopic.used_at >= cutoff_date
+            ).first()
+
+            return used is not None
+        except Exception as e:
+            self.reset_session()
+            return False
+
+    def get_used_topics(self, days_back: int = 30, limit: int = 50) -> List[UsedTopic]:
+        """
+        Get list of recently used topics
+
+        Args:
+            days_back: How many days to look back
+            limit: Maximum number to return
+
+        Returns:
+            List of UsedTopic records
+        """
+        try:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+            return self.session.query(UsedTopic).filter(
+                UsedTopic.used_at >= cutoff_date
+            ).order_by(UsedTopic.used_at.desc()).limit(limit).all()
+        except Exception as e:
+            self.reset_session()
+            return []
+
+    def cleanup_old_used_topics(self, days_old: int = 90) -> int:
+        """
+        Delete old used topic records
+
+        Args:
+            days_old: Delete records older than this many days
+
+        Returns:
+            Number of records deleted
+        """
+        try:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
+
+            deleted_count = self.session.query(UsedTopic).filter(
+                UsedTopic.used_at < cutoff_date
+            ).delete()
+
+            self.session.commit()
+            return deleted_count
+        except Exception as e:
+            self.session.rollback()
+            print(f"Error cleaning up old used topics: {e}")
+            return 0
 
     def close(self):
         """Close database session"""

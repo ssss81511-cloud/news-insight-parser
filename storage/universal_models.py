@@ -272,6 +272,38 @@ class GeneratedContent(Base):
         return f"<GeneratedContent {self.format_type}: {self.title[:50] if self.title else 'Untitled'}>"
 
 
+class UsedTopic(Base):
+    """
+    Track which topics have been used for content generation
+
+    This ensures we don't repeat topics and maintain variety in auto-generated content
+    """
+    __tablename__ = 'used_topics'
+
+    id = Column(Integer, primary_key=True)
+
+    # Topic identification
+    topic_id = Column(Integer, nullable=True, index=True)  # Reference to topic if from analytics
+    keywords = Column(Text)  # JSON array of keywords that define this topic
+    keywords_hash = Column(String(64), index=True)  # Hash for quick duplicate detection
+
+    # Tracking
+    used_at = Column(DateTime, default=func.now(), index=True)
+    content_id = Column(Integer, ForeignKey('generated_content.id'), nullable=True)
+
+    # Metadata
+    post_count = Column(Integer, default=0)  # How many posts were in the topic
+    source_type = Column(String(20))  # 'topic', 'trend', 'cluster'
+
+    # Indexes
+    __table_args__ = (
+        Index('idx_keywords_hash_used', 'keywords_hash', 'used_at'),
+    )
+
+    def __repr__(self):
+        return f"<UsedTopic {self.keywords_hash[:8]} used at {self.used_at}>"
+
+
 # Database initialization
 def init_universal_db(database_url='sqlite:///data/insights.db'):
     """Initialize database with universal models"""
