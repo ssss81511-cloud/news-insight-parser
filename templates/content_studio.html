@@ -41,7 +41,7 @@
                     <label>Выберите топик:</label>
                     <select id="topic-keywords" class="form-control">
                         {% for topic in topics %}
-                        <option value="{{ topic.keywords|tojson }}">
+                        <option value="{{ topic.keywords|join('|||') }}">
                             Топик {{ topic.topic_id }}: {{ topic.keywords[:5]|join(', ') }} ({{ topic.post_count }} постов)
                         </option>
                         {% endfor %}
@@ -389,13 +389,18 @@ document.getElementById('generate-btn').addEventListener('click', async function
         requestData.lookback_days = 7;
     } else if (sourceType === 'topic') {
         const topicSelect = document.getElementById('topic-keywords');
-        try {
-            requestData.keywords = JSON.parse(topicSelect.value);
-        } catch (e) {
-            alert('Ошибка парсинга топика. Попробуйте другой топик.');
+        const topicValue = topicSelect.value;
+
+        if (!topicValue) {
+            alert('Пожалуйста, выберите топик из списка.');
             return;
         }
+
+        // Split by '|||' separator
+        requestData.keywords = topicValue.split('|||').filter(k => k.trim());
         requestData.lookback_days = 7;
+
+        console.log('Topic keywords:', requestData.keywords);
     } else if (sourceType === 'cluster') {
         requestData.cluster_id = document.getElementById('cluster-id').value;
     }
