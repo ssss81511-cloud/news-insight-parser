@@ -14,7 +14,7 @@ import feedparser
 import requests
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from parsers.base_parser import BaseParser
 from loguru import logger
@@ -274,7 +274,7 @@ class RedditParser(BaseParser):
                 'has_focus_pattern': has_focus_pattern,
                 'source_method': 'rss',  # Помечаем что данные из RSS
             },
-            'created_at': datetime.fromtimestamp(raw_post['created_utc']) if raw_post['created_utc'] else datetime.utcnow(),
+            'created_at': datetime.fromtimestamp(raw_post['created_utc'], tz=timezone.utc) if raw_post['created_utc'] else datetime.now(timezone.utc),
         }
 
         # Генерируем content_hash
@@ -319,7 +319,7 @@ class RedditParser(BaseParser):
             'score': raw_comment.get('score', 0),
             'parent_comment_id': raw_comment.get('parent_id'),
             'is_op': raw_comment.get('is_submitter', False),
-            'created_at': datetime.fromtimestamp(raw_comment['created_utc']) if 'created_utc' in raw_comment else datetime.utcnow(),
+            'created_at': datetime.fromtimestamp(raw_comment['created_utc'], tz=timezone.utc) if 'created_utc' in raw_comment else datetime.now(timezone.utc),
         }
 
         return normalized

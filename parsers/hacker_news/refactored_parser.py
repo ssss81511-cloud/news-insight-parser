@@ -3,7 +3,7 @@ Refactored Hacker News parser using BaseParser architecture
 """
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from loguru import logger
 import sys
@@ -151,7 +151,7 @@ class HackerNewsParser(BaseParser):
             'category': None,  # HN doesn't have categories
 
             # Temporal
-            'created_at': datetime.fromtimestamp(raw_post.get('time', 0)),
+            'created_at': datetime.fromtimestamp(raw_post.get('time', 0), tz=timezone.utc),
         }
 
     def normalize_comment(self, raw_comment: Dict, post_db_id: int) -> Dict:
@@ -182,7 +182,7 @@ class HackerNewsParser(BaseParser):
             'score': 0,  # HN doesn't provide comment scores via API
 
             # Temporal
-            'created_at': datetime.fromtimestamp(raw_comment.get('time', 0)),
+            'created_at': datetime.fromtimestamp(raw_comment.get('time', 0), tz=timezone.utc),
         }
 
     def get_available_sections(self) -> List[str]:
