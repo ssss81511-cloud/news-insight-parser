@@ -19,10 +19,13 @@ def test_ai_image_generation():
     print("AI IMAGE GENERATION TEST")
     print("=" * 60)
 
-    # Test prompt
-    prompt = "Professional news background with modern design, technology theme, abstract visualization, high quality, detailed"
+    # Test prompt (simulating what the system generates from hashtags)
+    # Example hashtags: ['AI', 'healthcare', 'technology']
+    prompt = "Professional modern tech illustration about AI, healthcare, technology, minimalist design, vibrant colors, high quality, digital art"
 
-    print(f"\n📝 Prompt: {prompt}")
+    print(f"\n📝 Test Prompt (from hashtags):")
+    print(f"   {prompt}")
+    print(f"\n💡 This simulates what happens when hashtags: ['AI', 'healthcare', 'technology']")
     print(f"\n🔄 Calling Stable Diffusion API...")
 
     headers = {"Content-Type": "application/json"}
