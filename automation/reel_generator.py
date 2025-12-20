@@ -124,8 +124,21 @@ class ReelGenerator:
             print(f"[PEXELS] No API key - skipping photo fetch", flush=True)
             return None
 
-        # Build search query
-        query = ' '.join(keywords[:3]) if keywords else 'technology business'
+        # Process keywords - split CamelCase and take simple words
+        import re
+        processed = []
+        for kw in keywords[:3]:
+            # Split CamelCase: AIRevolution → AI Revolution
+            words = re.sub('([A-Z][a-z]+)', r' \1', re.sub('([A-Z]+)', r' \1', kw)).split()
+            processed.extend(words)
+
+        # Use simple, common words that Pexels understands
+        query = ' '.join(processed[:5]).lower() if processed else 'technology business abstract'
+
+        # Fallback to generic tech terms if query is too specific
+        if not any(word in query for word in ['tech', 'business', 'work', 'startup', 'office', 'computer', 'digital']):
+            query = 'technology business innovation'
+
         print(f"[PEXELS] Searching: {query}", flush=True)
 
         try:
