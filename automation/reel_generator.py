@@ -211,7 +211,10 @@ class ReelGenerator:
 
         # Use AI image generation if enabled
         if self.use_ai:
+            print(f"[REEL] ✅ AI generation ENABLED - attempting to generate AI image", flush=True)
             prompt = self._create_prompt_from_content(title, key_points[:3] if key_points else [])
+            print(f"[REEL] 📝 Prompt created: {prompt[:100]}...", flush=True)
+
             ai_image = self._generate_ai_image(prompt)
 
             if ai_image:
@@ -224,13 +227,15 @@ class ReelGenerator:
                 img = Image.alpha_composite(img, overlay)
                 img = img.convert('RGB')
 
-                print(f"[REEL] Using AI-generated background", flush=True)
+                print(f"[REEL] ✅ Using AI-generated background (size: {ai_image.size})", flush=True)
             else:
                 # Fallback to basic colored background if AI fails
-                print(f"[REEL] AI generation failed, using fallback", flush=True)
+                print(f"[REEL] ❌ AI generation FAILED - using colored fallback background", flush=True)
+                print(f"[REEL] ⚠️  Check logs above for API error details", flush=True)
                 img = Image.new('RGB', (width, height), colors['background'])
         else:
             # Create basic colored background
+            print(f"[REEL] ⚠️  AI generation DISABLED - using colored background", flush=True)
             img = Image.new('RGB', (width, height), colors['background'])
 
         draw = ImageDraw.Draw(img)

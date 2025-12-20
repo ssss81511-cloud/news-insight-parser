@@ -296,7 +296,9 @@ class TelegramPoster:
 
             if hashtags:
                 parts.append("")  # Empty line
-                parts.append(' '.join(hashtags))
+                # Format hashtags with # symbol
+                formatted_hashtags = [f'#{tag.lstrip("#")}' for tag in hashtags]
+                parts.append(' '.join(formatted_hashtags))
 
         return '\n'.join(parts)
 
