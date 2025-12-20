@@ -281,6 +281,25 @@ def analyze_signals():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/api/run-insights', methods=['POST'])
+def run_insights():
+    """Run insights analysis to create topics"""
+    try:
+        logger.info("Running insights analysis via API")
+
+        # Run insights analysis
+        topics = insights_analyzer.analyze_topics()
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Insights analysis completed',
+            'topics_found': len(topics) if topics else 0
+        })
+    except Exception as e:
+        logger.error(f"Insights analysis error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/api/status')
 def get_status():
     """Get current parser status"""
