@@ -287,17 +287,19 @@ def run_insights():
     try:
         logger.info("Running insights analysis via API")
 
-        # Run insights analysis
-        topics = insights_analyzer.analyze_topics()
+        # Run insights analysis - detect_topics returns a list of topics
+        topics = insights_analyzer.detect_topics(lookback_days=30, n_topics=10, n_words=10)
 
         return jsonify({
             'status': 'success',
             'message': f'Insights analysis completed',
-            'topics_found': len(topics) if topics else 0
+            'topics_found': len(topics) if topics else 0,
+            'topics': topics
         })
     except Exception as e:
         logger.error(f"Insights analysis error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        import traceback
+        return jsonify({'status': 'error', 'message': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 @app.route('/api/status')
@@ -693,19 +695,9 @@ def get_posts_count():
 def get_topics():
     """Get all topics from analytics"""
     try:
-        from storage.universal_models import Topic
-        topics = db.session.query(Topic).all()
-        result = []
-        for topic in topics:
-            result.append({
-                'id': topic.id,
-                'keywords': json.loads(topic.keywords) if topic.keywords else [],
-                'post_count': topic.post_count,
-                'avg_importance': float(topic.avg_importance) if topic.avg_importance else 0,
-                'is_trending': topic.is_trending,
-                'created_at': topic.created_at.isoformat() if topic.created_at else None
-            })
-        return jsonify(result)
+        # Use insights_analyzer to detect topics from recent posts
+        topics = insights_analyzer.detect_topics(lookback_days=30, n_topics=10, n_words=10)
+        return jsonify(topics if topics else [])
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
