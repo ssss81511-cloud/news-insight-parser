@@ -3,7 +3,7 @@ Base parser class - unified interface for all data sources
 """
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import hashlib
 
 
