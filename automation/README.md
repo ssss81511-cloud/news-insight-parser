@@ -189,45 +189,104 @@ ratios = generator.get_available_aspect_ratios()
 - `minimal`: Light gray with subtle slate tones
 - `dark`: Black with red/green accents
 
-### 4. AutoContentSystem (Planned)
+### 4. AutoContentSystem (✓ Implemented)
 
 Main orchestrator that coordinates all components for fully automated content pipeline.
 
-**Planned Features:**
-- Scheduled content generation
-- End-to-end workflow orchestration
-- Error handling and recovery
-- Performance monitoring
-- Configurable schedules
+**Features:**
+- ✓ End-to-end workflow orchestration
+- ✓ 7-step automated process
+- ✓ Comprehensive error handling with graceful degradation
+- ✓ Detailed logging at each step
+- ✓ Configuration system
+- ✓ Statistics tracking
+- ✓ Component testing
+- ✓ Async and sync wrappers
 
-**Planned Usage:**
+**Workflow Steps:**
+1. Select unique topic (TopicSelector)
+2. Fetch posts for topic (Database)
+3. Generate content (ContentGenerator)
+4. Save content to database
+5. Mark topic as used
+6. Generate reel image (ReelGenerator)
+7. Post to Telegram (TelegramPoster)
+
+**Usage:**
 ```python
-from automation.auto_content_system import AutoContentSystem
+from automation.auto_content_system import AutoContentSystem, sync_generate_and_post
 
 # Initialize system
 auto_system = AutoContentSystem(
     db_manager=db,
-    content_generator=content_gen,
-    topic_selector=selector,
-    telegram_poster=poster,
-    reel_generator=reel_gen
+    content_generator=content_generator,
+    topic_selector=topic_selector,
+    telegram_poster=telegram_poster,
+    reel_generator=reel_generator,
+    config={
+        'topic_exclude_days': 30,
+        'topic_prefer_trending': True,
+        'content_format': 'long_post',
+        'content_language': 'ru',
+        'reel_style': 'modern',
+        'enable_reel': True,
+        'enable_telegram': True
+    }
 )
 
-# Run once
-await auto_system.generate_and_post()
+# Async usage
+result = await auto_system.generate_and_post()
 
-# Or schedule (using APScheduler)
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+# Sync usage (for Flask)
+result = sync_generate_and_post(auto_system)
 
-scheduler = AsyncIOScheduler()
+# Check result
+if result['success']:
+    print(f"Posted! Content ID: {result['content_id']}, Message ID: {result['message_id']}")
+else:
+    print(f"Failed: {result['error']}")
+
+# Get statistics
+stats = auto_system.get_stats()
+
+# Test components
+test_results = await auto_system.test_components()
+```
+
+**Integration with APScheduler:**
+```python
+from apscheduler.schedulers.background import BackgroundScheduler
+
+scheduler = BackgroundScheduler()
 scheduler.add_job(
-    auto_system.generate_and_post,
-    'cron',
-    hour=9,        # Daily at 9:00
-    minute=0
+    func=lambda: sync_generate_and_post(auto_system),
+    trigger='cron',
+    hour=9,
+    minute=0,
+    id='daily_content'
 )
 scheduler.start()
 ```
+
+**Result Structure:**
+```python
+{
+    'success': bool,
+    'content_id': int,           # Database ID of generated content
+    'message_id': int,           # Telegram message ID
+    'image_path': str,           # Path to generated reel
+    'topic': Dict,               # Topic that was used
+    'error': str or None,
+    'timestamp': datetime
+}
+```
+
+**Error Handling:**
+- Topic selection failure: Returns error immediately
+- No posts found: Returns error with topic info
+- Content generation failure: Returns error
+- Reel generation failure: Continues without image (graceful)
+- Telegram posting failure: Content saved but not posted (can retry manually)
 
 ## Database Schema
 
