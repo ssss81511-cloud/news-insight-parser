@@ -15,6 +15,15 @@ from datetime import datetime, timezone
 import threading
 import os
 import json
+import logging
+
+# Automation imports
+from automation.topic_selector import TopicSelector
+from automation.telegram_poster import TelegramPoster
+from automation.reel_generator import create_reel_generator
+from automation.auto_content_system import AutoContentSystem, sync_generate_and_post
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
@@ -53,6 +62,66 @@ content_generator = ContentGenerator(api_key=GROQ_API_KEY, db_manager=db)
 
 # Scheduler for automatic parsing
 scheduler = get_scheduler()
+
+# ============================================================
+# AUTOMATION SYSTEM INITIALIZATION
+# ============================================================
+
+# Environment variables for automation
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
+AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
+AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
+AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
+
+# Configure logging for automation
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+# Initialize automation components
+topic_selector = TopicSelector(db)
+reel_generator = create_reel_generator(output_dir='generated_reels')
+
+# Initialize Telegram poster if credentials are provided
+telegram_poster = None
+if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
+    try:
+        telegram_poster = TelegramPoster(TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID)
+        logger.info(f"Telegram poster initialized for channel: {TELEGRAM_CHANNEL_ID}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Telegram poster: {e}")
+
+# Initialize AutoContentSystem if GROQ API key is available
+auto_system = None
+if GROQ_API_KEY:
+    auto_system = AutoContentSystem(
+        db_manager=db,
+        content_generator=content_generator,
+        topic_selector=topic_selector,
+        telegram_poster=telegram_poster,
+        reel_generator=reel_generator,
+        config={
+            'topic_exclude_days': int(os.getenv('TOPIC_EXCLUDE_DAYS', '30')),
+            'topic_prefer_trending': os.getenv('TOPIC_PREFER_TRENDING', 'true').lower() == 'true',
+            'topic_min_posts': int(os.getenv('TOPIC_MIN_POSTS', '3')),
+            'content_format': os.getenv('CONTENT_FORMAT', 'long_post'),
+            'content_language': os.getenv('CONTENT_LANGUAGE', 'ru'),
+            'content_tone': os.getenv('CONTENT_TONE', 'professional'),
+            'reel_aspect_ratio': os.getenv('REEL_ASPECT_RATIO', 'reel'),
+            'reel_style': os.getenv('REEL_STYLE', 'modern'),
+            'enable_reel': os.getenv('ENABLE_REEL', 'true').lower() == 'true',
+            'enable_telegram': telegram_poster is not None,
+        }
+    )
+    logger.info("AutoContentSystem initialized")
+
+# Initialize automation scheduler
+automation_scheduler = BackgroundScheduler()
+automation_scheduler_enabled = False
 
 # Set up scheduler with orchestrator and analyze callback
 scheduler.set_orchestrator(orchestrator)
@@ -580,6 +649,170 @@ def delete_content(content_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+# ============================================================
+# AUTOMATION API ENDPOINTS
+# ============================================================
+
+@app.route('/api/auto-generate', methods=['POST'])
+def trigger_auto_generate():
+    """Manually trigger automated content generation"""
+    if not auto_system:
+        return jsonify({
+            'status': 'error',
+            'message': 'AutoContentSystem not configured. Check GROQ_API_KEY.'
+        }), 500
+
+    logger.info("Manual auto-generate triggered via API")
+
+    try:
+        result = sync_generate_and_post(auto_system)
+
+        return jsonify({
+            'status': 'success' if result['success'] else 'error',
+            'content_id': result.get('content_id'),
+            'message_id': result.get('message_id'),
+            'image_path': result.get('image_path'),
+            'topic': {
+                'keywords': result.get('topic', {}).get('keywords', [])[:5] if result.get('topic') else None,
+                'post_count': result.get('topic', {}).get('post_count', 0) if result.get('topic') else 0
+            },
+            'error': result.get('error'),
+            'timestamp': result.get('timestamp').isoformat() if result.get('timestamp') else None
+        })
+    except Exception as e:
+        logger.error(f"Auto-generate failed: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/auto-stats', methods=['GET'])
+def get_auto_stats():
+    """Get automation system statistics"""
+    if not auto_system:
+        return jsonify({
+            'status': 'error',
+            'message': 'AutoContentSystem not configured'
+        }), 500
+
+    try:
+        stats = auto_system.get_stats()
+        return jsonify({
+            'status': 'success',
+            'stats': stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to get auto-stats: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/automation-status', methods=['GET'])
+def get_automation_status():
+    """Get automation scheduler status"""
+    global automation_scheduler_enabled
+
+    jobs = []
+    if automation_scheduler and automation_scheduler_enabled:
+        for job in automation_scheduler.get_jobs():
+            jobs.append({
+                'id': job.id,
+                'name': job.name,
+                'next_run': job.next_run_time.isoformat() if job.next_run_time else None,
+                'trigger': str(job.trigger)
+            })
+
+    return jsonify({
+        'enabled': automation_scheduler_enabled,
+        'configured': auto_system is not None,
+        'telegram_enabled': telegram_poster is not None,
+        'schedule': f"{AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}" if AUTO_GENERATE_ENABLED else None,
+        'jobs': jobs,
+        'config': auto_system.config if auto_system else None
+    })
+
+
+@app.route('/api/automation/enable', methods=['POST'])
+def enable_automation():
+    """Enable automated content generation"""
+    global automation_scheduler_enabled
+
+    if not auto_system:
+        return jsonify({
+            'status': 'error',
+            'message': 'AutoContentSystem not configured'
+        }), 500
+
+    try:
+        # Add scheduled job if not already added
+        if not automation_scheduler_enabled:
+            automation_scheduler.add_job(
+                func=scheduled_content_generation,
+                trigger='cron',
+                hour=AUTO_GENERATE_HOUR,
+                minute=AUTO_GENERATE_MINUTE,
+                id='daily_content_generation',
+                name='Daily automated content generation',
+                replace_existing=True
+            )
+            automation_scheduler_enabled = True
+            logger.info(f"Automation enabled - Will run daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}")
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Automation enabled - Runs daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}'
+        })
+    except Exception as e:
+        logger.error(f"Failed to enable automation: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/automation/disable', methods=['POST'])
+def disable_automation():
+    """Disable automated content generation"""
+    global automation_scheduler_enabled
+
+    try:
+        if automation_scheduler_enabled:
+            automation_scheduler.remove_job('daily_content_generation')
+            automation_scheduler_enabled = False
+            logger.info("Automation disabled")
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Automation disabled'
+        })
+    except Exception as e:
+        logger.error(f"Failed to disable automation: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+def scheduled_content_generation():
+    """
+    Scheduled job for automated content generation
+
+    This runs on a schedule (e.g., daily at 9 AM)
+    """
+    if not auto_system:
+        logger.error("AutoContentSystem not initialized")
+        return
+
+    logger.info("="*60)
+    logger.info("SCHEDULED CONTENT GENERATION STARTED")
+    logger.info("="*60)
+
+    try:
+        result = sync_generate_and_post(auto_system)
+
+        if result['success']:
+            logger.info(f"SUCCESS - Content ID: {result['content_id']}, Message ID: {result['message_id']}")
+            if result.get('topic'):
+                logger.info(f"Topic: {result['topic'].get('keywords', [])[:3]}")
+        else:
+            logger.error(f"FAILED - {result['error']}")
+    except Exception as e:
+        logger.error(f"Scheduled generation failed: {e}", exc_info=True)
+
+    logger.info("="*60)
+
+
 def run_auto_ai_analysis():
     """
     Automatically analyze all posts without AI analysis
@@ -668,36 +901,89 @@ def time_ago_filter(dt):
 # Initialize application (runs on import, so works with gunicorn)
 def init_app():
     """Initialize application components"""
+    global automation_scheduler_enabled
+
     # Create data directory if it doesn't exist
     os.makedirs('data', exist_ok=True)
+    os.makedirs('generated_reels', exist_ok=True)
 
     # Initialize database
     db.engine
 
-    # Start scheduler
+    # Start parsing scheduler
     scheduler.start()
 
     print("=" * 50, flush=True)
-    print("News Insight Parser - Version 2.0", flush=True)
+    print("News Insight Parser - Version 2.0 + Automation", flush=True)
     print("=" * 50, flush=True)
     print("[OK] Universal architecture", flush=True)
     print("[OK] Multi-source support", flush=True)
     print("[OK] Signal prioritization", flush=True)
     print("[OK] Automatic scheduler", flush=True)
+    print("[OK] AutoContentSystem", flush=True)
     print("=" * 50, flush=True)
     print(f"Registered sources: {', '.join(orchestrator.get_registered_sources())}", flush=True)
     print("=" * 50, flush=True)
 
-    # Show scheduler status
+    # Show parsing scheduler status
     sched_status = scheduler.get_status()
     if sched_status.get('auto_parse_enabled', False):
         enabled_sources = [name for name, data in sched_status.get('sources', {}).items()
                           if data.get('enabled', False)]
-        print(f"[SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}", flush=True)
+        print(f"[PARSER SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}", flush=True)
     else:
-        print("[SCHEDULER] Auto-parse: OFF", flush=True)
+        print("[PARSER SCHEDULER] Auto-parse: OFF", flush=True)
+
+    # Start automation scheduler
+    automation_scheduler.start()
+    logger.info("Automation scheduler started")
+
+    # Add automation job if enabled
+    if AUTO_GENERATE_ENABLED and auto_system:
+        try:
+            automation_scheduler.add_job(
+                func=scheduled_content_generation,
+                trigger='cron',
+                hour=AUTO_GENERATE_HOUR,
+                minute=AUTO_GENERATE_MINUTE,
+                id='daily_content_generation',
+                name='Daily automated content generation',
+                replace_existing=True
+            )
+            automation_scheduler_enabled = True
+            logger.info(f"[AUTOMATION] Auto-generate: ON | Schedule: Daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}")
+        except Exception as e:
+            logger.error(f"Failed to schedule automation: {e}")
+    else:
+        logger.info("[AUTOMATION] Auto-generate: OFF (set AUTO_GENERATE_ENABLED=true to enable)")
+
+    # Show automation status
+    if auto_system:
+        print(f"[AUTOMATION] Configured: YES | Telegram: {'YES' if telegram_poster else 'NO'}", flush=True)
+    else:
+        print("[AUTOMATION] Configured: NO (GROQ_API_KEY required)", flush=True)
 
     print("=" * 50, flush=True)
+
+    # Register shutdown handler
+    atexit.register(shutdown_scheduler)
+
+
+def shutdown_scheduler():
+    """Shutdown schedulers gracefully"""
+    try:
+        if scheduler:
+            scheduler.shutdown()
+            logger.info("Parser scheduler shutdown")
+    except:
+        pass
+
+    try:
+        if automation_scheduler:
+            automation_scheduler.shutdown()
+            logger.info("Automation scheduler shutdown")
+    except:
+        pass
 
 
 # Initialize on module import (works with both gunicorn and direct run)
