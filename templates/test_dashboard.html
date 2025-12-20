@@ -524,9 +524,25 @@
         async function testAutoGenerate() {
             log('Тест генерации и публикации...', 'info');
             showProgress();
-            updateProgress(10, 3, 'active');
 
             try {
+                // Step 3: Topic Selection
+                updateProgress(10, 3, 'active');
+                log('[3/6] Выбор уникальной темы...', 'info');
+                await sleep(500);
+
+                // Step 4: Content Generation
+                updateProgress(25, 3, 'completed');
+                updateProgress(25, 4, 'active');
+                log('[4/6] Генерация контента...', 'info');
+                await sleep(500);
+
+                // Step 5: Reel Generation
+                updateProgress(50, 4, 'completed');
+                updateProgress(50, 5, 'active');
+                log('[5/6] Генерация картинки...', 'info');
+
+                // Actually call the API
                 const response = await fetch('/api/auto-generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
@@ -534,9 +550,22 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
+                    // Step 6: Telegram Posting
+                    updateProgress(75, 5, 'completed');
+                    updateProgress(75, 6, 'active');
+                    log('[6/6] Публикация в Telegram...', 'info');
+                    await sleep(500);
+
+                    // Complete
                     updateProgress(100, 6, 'completed');
-                    log(`✅ УСПЕХ! Content ID: ${data.content_id}, Message ID: ${data.message_id}`, 'success');
-                    log(`Тема: ${data.topic.keywords.join(', ')}`, 'info');
+                    log(`✅ УСПЕХ! Content ID: ${data.content_id}`, 'success');
+                    if (data.message_id) {
+                        log(`📨 Telegram Message ID: ${data.message_id}`, 'success');
+                    }
+                    log(`📝 Тема: ${data.topic.keywords.slice(0, 3).join(', ')}`, 'info');
+                    if (data.image_path) {
+                        log(`🎨 Картинка: ${data.image_path}`, 'info');
+                    }
                     log('🎉 Проверь Telegram канал: @newsinsigth', 'success');
                 } else {
                     updateProgress(100, 3, 'error');

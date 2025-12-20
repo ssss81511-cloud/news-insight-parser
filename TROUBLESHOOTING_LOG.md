@@ -418,7 +418,124 @@ request = HTTPXRequest(
 self.bot = Bot(token=bot_token, request=request)
 ```
 
-**Статус:** ✅ Исправлено в следующем коммите
+**Статус:** ✅ Исправлено в коммите 3afbd78
+
+---
+
+### Ошибка #9: Test dashboard застревает на шаге 3 и прыгает к шагу 6
+**Время обнаружения:** 2025-12-21 (тестирование пользователя)
+**Файл:** `templates/test_dashboard.html`
+
+**Симптомы:**
+- Шаг 3 "Выбор уникальной темы" горит желтым и застревает
+- Затем сразу прыгает к шагу 6
+- Шаги 4 и 5 пропускаются
+
+**Причина:**
+```javascript
+// templates/test_dashboard.html:528
+async function testAutoGenerate() {
+    updateProgress(10, 3, 'active');  // ← Активирует шаг 3
+
+    const response = await fetch('/api/auto-generate', { method: 'POST' });
+    const data = await response.json();
+
+    if (data.status === 'success') {
+        updateProgress(100, 6, 'completed');  // ← Сразу прыгает к шагу 6!
+    }
+}
+```
+
+API `/api/auto-generate` делает всё за один вызов:
+- Выбор темы (step 3)
+- Генерация контента (step 4)
+- Генерация картинки (step 5)
+- Публикация в Telegram (step 6)
+
+Но JavaScript не знает о промежуточных шагах.
+
+**Решение:**
+Добавить промежуточные обновления прогресса:
+```javascript
+async function testAutoGenerate() {
+    updateProgress(10, 3, 'active');
+    log('[3/6] Выбор уникальной темы...', 'info');
+
+    updateProgress(25, 4, 'active');
+    log('[4/6] Генерация контента...', 'info');
+
+    updateProgress(50, 5, 'active');
+    log('[5/6] Генерация картинки...', 'info');
+
+    const response = await fetch('/api/auto-generate', { method: 'POST' });
+    const data = await response.json();
+
+    if (data.status === 'success') {
+        updateProgress(75, 6, 'active');
+        log('[6/6] Публикация в Telegram...', 'info');
+
+        updateProgress(100, 6, 'completed');
+        log('✅ УСПЕХ!', 'success');
+    }
+}
+```
+
+**Статус:** ⏳ Исправляю сейчас
+
+---
+
+### Ошибка #10: Reel генератор создаёт "набор пикселей" вместо нормальной картинки
+**Время обнаружения:** 2025-12-21 (тестирование пользователя)
+**Файл:** `automation/reel_generator.py:132`
+
+**Симптомы:**
+- Сгенерированная картинка выглядит как "полная чушь"
+- "Набор пикселей" вместо читаемого текста
+- Текст почти невидимый
+
+**Причина:**
+```python
+# automation/reel_generator.py:132
+try:
+    title_font = ImageFont.truetype("arial.ttf", size=80)  # ← arial.ttf не существует на Linux!
+except:
+    title_font = ImageFont.load_default(size=80)  # ← load_default игнорирует size parameter
+                                                   # ← возвращает крошечный bitmap font
+```
+
+На Render (Linux):
+- `arial.ttf` не существует → Exception
+- `ImageFont.load_default()` возвращает tiny bitmap font ~10px
+- Параметр `size=80` игнорируется для default font
+- Результат: нечитаемый текст
+
+**Решение:**
+Использовать font, который существует на Linux:
+```python
+import os
+
+def _get_font(self, size):
+    """Get font with fallback chain"""
+    # Try Linux system fonts
+    linux_fonts = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+
+    for font_path in linux_fonts:
+        if os.path.exists(font_path):
+            try:
+                return ImageFont.truetype(font_path, size)
+            except:
+                continue
+
+    # Fallback: возвращаем default но предупреждаем
+    print(f"[WARNING] No system fonts found, using default (will look bad)", flush=True)
+    return ImageFont.load_default()
+```
+
+**Статус:** ⏳ Исправляю сейчас
 
 ---
 

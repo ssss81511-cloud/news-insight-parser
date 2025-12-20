@@ -126,23 +126,10 @@ class ReelGenerator:
         img = Image.new('RGB', (width, height), colors['background'])
         draw = ImageDraw.Draw(img)
 
-        # Load fonts (try different sizes, fallback to default if not available)
-        try:
-            # Try to load custom font
-            title_font = ImageFont.truetype("arial.ttf", size=80)
-            points_font = ImageFont.truetype("arial.ttf", size=50)
-            footer_font = ImageFont.truetype("arial.ttf", size=40)
-        except:
-            # Fallback to default font
-            try:
-                title_font = ImageFont.load_default(size=80)
-                points_font = ImageFont.load_default(size=50)
-                footer_font = ImageFont.load_default(size=40)
-            except:
-                # Very old Pillow version - use default without size
-                title_font = ImageFont.load_default()
-                points_font = ImageFont.load_default()
-                footer_font = ImageFont.load_default()
+        # Load fonts with proper Linux font fallback
+        title_font = self._get_font(80)
+        points_font = self._get_font(50)
+        footer_font = self._get_font(40)
 
         # Calculate layout
         margin = 60
@@ -222,6 +209,43 @@ class ReelGenerator:
         print(f"[REEL GENERATOR] Saved reel to: {filepath}", flush=True)
 
         return filepath
+
+    def _get_font(self, size: int):
+        """
+        Get font with proper fallback chain for Linux/Windows compatibility
+
+        Args:
+            size: Font size in points
+
+        Returns:
+            ImageFont object
+        """
+        # Try Linux system fonts (common on Render, Heroku, etc.)
+        linux_fonts = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        ]
+
+        for font_path in linux_fonts:
+            if os.path.exists(font_path):
+                try:
+                    return ImageFont.truetype(font_path, size)
+                except Exception as e:
+                    print(f"[REEL] Failed to load {font_path}: {e}", flush=True)
+                    continue
+
+        # Try Windows fonts
+        try:
+            return ImageFont.truetype("arial.ttf", size)
+        except:
+            pass
+
+        # Last resort: default font (will look bad but at least won't crash)
+        print(f"[WARNING] No system fonts found! Using default font (will look bad)", flush=True)
+        print(f"[WARNING] Install fonts: apt-get install fonts-dejavu-core", flush=True)
+        return ImageFont.load_default()
 
     def _wrap_text(self, text: str, max_width: int, font, draw) -> List[str]:
         """
