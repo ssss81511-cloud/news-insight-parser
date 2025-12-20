@@ -317,6 +317,65 @@ GROQ_API_KEY=(проверить установлен ли)
 
 ---
 
+### Ошибка #7: AutoContentSystem вызывает неправильный метод ContentGenerator
+**Время обнаружения:** 2025-12-21 (после установки env vars)
+**Файл:** `automation/auto_content_system.py:290`
+
+**Симптомы:**
+```json
+{
+  "error": "Content generation failed",
+  "topic": {"keywords": ["discussion","link","ai"], "post_count": 15}
+}
+```
+
+**Причина:**
+```python
+# automation/auto_content_system.py:290
+self.content_generator.generate_from_topic(
+    posts=posts,  # ← НЕПРАВИЛЬНО! Параметр не существует
+    format_type=...,
+    language=...,
+    tone=...
+)
+
+# analyzers/content_generator.py:129
+def generate_from_topic(self,
+                       topic_keywords: List[str],  # ← Ожидает topic_keywords!
+                       lookback_days: int = 7,
+                       ...)
+```
+
+**Mismatch:**
+- AutoContentSystem передаёт `posts=posts` (список объектов UniversalPost)
+- Но generate_from_topic() ожидает `topic_keywords` (список строк)
+
+**Решение:**
+AutoContentSystem должен вызывать `generate_from_cluster()` вместо `generate_from_topic()`:
+
+```python
+# automation/auto_content_system.py:290
+# БЫЛО:
+return self.content_generator.generate_from_topic(
+    posts=posts,
+    format_type=...,
+    language=...,
+    tone=...
+)
+
+# ДОЛЖНО БЫТЬ:
+return self.content_generator.generate_from_cluster(
+    cluster_posts=posts,
+    format_type=self.config['content_format'],
+    tone=self.config['content_tone'],
+    language=self.config['content_language']
+)
+```
+
+**Статус:** ⏳ Исправляю сейчас
+
+---
+
 ## 📝 СЛЕДУЮЩИЕ ШАГИ
 
 1. ✅ Создать этот лог

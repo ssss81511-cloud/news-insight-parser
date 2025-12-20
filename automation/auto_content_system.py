@@ -287,14 +287,16 @@ class AutoContentSystem:
             Generated content dictionary or None
         """
         try:
-            return self.content_generator.generate_from_topic(
-                posts=posts,
+            return self.content_generator.generate_from_cluster(
+                cluster_posts=posts,
                 format_type=self.config['content_format'],
-                language=self.config['content_language'],
-                tone=self.config['content_tone']
+                tone=self.config['content_tone'],
+                language=self.config['content_language']
             )
         except Exception as e:
             print(f"[ERROR] Content generation failed: {e}", flush=True)
+            import traceback
+            print(traceback.format_exc(), flush=True)
             return None
 
     def _save_content(self, content: Dict, topic: Dict) -> Optional[int]:
@@ -417,9 +419,10 @@ class AutoContentSystem:
             # Get a few posts to test
             posts = self.db.get_recent_posts(limit=5)
             if posts:
-                content = self.content_generator.generate_from_topic(
-                    posts=posts[:3],
+                content = self.content_generator.generate_from_cluster(
+                    cluster_posts=posts[:3],
                     format_type='long_post',
+                    tone='professional',
                     language='ru'
                 )
                 results['content_generator'] = {
