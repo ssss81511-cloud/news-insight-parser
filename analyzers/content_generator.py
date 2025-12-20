@@ -27,7 +27,7 @@ class ContentGenerator:
             db_manager: Database manager instance
         """
         self.client = Groq(api_key=api_key)
-        self.model = "llama-3.1-70b-versatile"  # More capable model for creative content
+        self.model = "llama-3.3-70b-versatile"  # Updated model (llama-3.1-70b is deprecated)
         self.db = db_manager
 
     def generate_from_cluster(self,
