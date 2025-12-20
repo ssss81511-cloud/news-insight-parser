@@ -30,7 +30,9 @@ def fromjson_filter(value):
         return []
 
 # Initialize database with universal models
-db = UniversalDatabaseManager()
+# Use PostgreSQL on production (Render) or SQLite locally
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/insights.db')
+db = UniversalDatabaseManager(database_url=DATABASE_URL)
 
 # Create orchestrator with parsers
 orchestrator = create_orchestrator(db)

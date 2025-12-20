@@ -4,10 +4,11 @@ Universal data models for all sources
 These models replace source-specific models (HNPost, RedditPost, etc.)
 All data from any source is normalized into these models.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -46,8 +47,8 @@ class UniversalPost(Base):
 
     # Temporal data
     created_at = Column(DateTime, index=True)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    fetched_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Deduplication
     content_hash = Column(String(64), index=True)  # SHA-256 hash for deduplication
@@ -111,7 +112,7 @@ class UniversalComment(Base):
 
     # Temporal
     created_at = Column(DateTime)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=func.now)
 
     # Relationships
     post = relationship("UniversalPost", back_populates="comments")
@@ -133,7 +134,7 @@ class DuplicateGroup(Base):
     id = Column(Integer, primary_key=True)
     canonical_title = Column(String(500))  # Main title to use
     similarity_score = Column(Float)  # How similar the posts are (0-1)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now)
 
     # Relationships
     posts = relationship("UniversalPost", back_populates="duplicate_group")
@@ -184,9 +185,9 @@ class EnhancedSignal(Base):
     is_cross_source = Column(Boolean, default=False)  # True if appears in multiple sources
 
     # Temporal tracking
-    first_seen = Column(DateTime, default=datetime.utcnow, index=True)
-    last_seen = Column(DateTime, default=datetime.utcnow, index=True)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    first_seen = Column(DateTime, default=func.now(), index=True)
+    last_seen = Column(DateTime, default=func.now(), index=True)
+    last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Status
     is_active = Column(Boolean, default=True, index=True)
@@ -211,7 +212,7 @@ class ParserRun(Base):
     source = Column(String(50), index=True)
     section = Column(String(50))
     items_fetched = Column(Integer, default=0)
-    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+    started_at = Column(DateTime, default=func.now, index=True)
     finished_at = Column(DateTime, nullable=True)
     status = Column(String(20), index=True)  # 'running', 'success', 'failed'
     error_message = Column(Text, nullable=True)
