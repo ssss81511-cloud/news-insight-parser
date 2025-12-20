@@ -3,7 +3,7 @@ services:
     name: news-insight-parser
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn --bind 0.0.0.0:$PORT app_v2:app"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT --timeout 600 --workers 2 --threads 4 --worker-class gthread app_v2:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11

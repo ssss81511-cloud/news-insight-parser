@@ -380,19 +380,26 @@ def run_parser(sources=None, limit=20):
             # Parse specific sources
             for source in sources:
                 parser_status['current_section'] = f"{source}"
+                print(f"[PARSER] Starting to parse: {source}", flush=True)
                 orchestrator.parse_source(source, limit_per_section=limit)
+                print(f"[PARSER] Completed parsing: {source}", flush=True)
         else:
             # Parse all sources
             parser_status['current_section'] = 'Все источники'
-            orchestrator.parse_all(limit_per_section=limit)
+            print(f"[PARSER] Starting to parse all sources", flush=True)
+            results = orchestrator.parse_all(limit_per_section=limit)
+            print(f"[PARSER] Completed parsing all sources: {results}", flush=True)
 
     except Exception as e:
-        print(f"Parser error: {e}")
+        import traceback
+        error_msg = f"Parser error: {e}\n{traceback.format_exc()}"
+        print(error_msg, flush=True)
         parser_status['current_section'] = f"Ошибка: {str(e)}"
 
     finally:
         parser_status['is_running'] = False
         parser_status['current_section'] = None
+        print("[PARSER] Parser stopped", flush=True)
 
 
 @app.template_filter('time_ago')
