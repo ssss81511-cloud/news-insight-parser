@@ -70,6 +70,7 @@ scheduler = get_scheduler()
 # Environment variables for automation
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
+HUGGING_FACE_TOKEN = os.getenv('HUGGING_FACE_TOKEN')  # Required for AI image generation
 AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
 AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
 AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
@@ -84,8 +85,12 @@ logger = logging.getLogger(__name__)
 
 # Initialize automation components
 topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
-# IMPORTANT: use_ai=True enables AI image generation via Stable Diffusion
-reel_generator = create_reel_generator(output_dir='generated_reels', use_ai=True)
+# IMPORTANT: use_ai=True + hf_token enables AI image generation via Stable Diffusion
+reel_generator = create_reel_generator(
+    output_dir='generated_reels',
+    use_ai=True,
+    hf_token=HUGGING_FACE_TOKEN
+)
 
 # Initialize Telegram poster if credentials are provided
 telegram_poster = None

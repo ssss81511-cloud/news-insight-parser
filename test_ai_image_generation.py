@@ -3,21 +3,43 @@ Self-verification test for AI image generation
 
 This script tests the Stable Diffusion API directly and generates a sample image
 so you can verify it's working properly.
+
+IMPORTANT: Requires Hugging Face token!
+Get free token at: https://huggingface.co/settings/tokens
+Set in .env: HUGGING_FACE_TOKEN=hf_...
 """
 import requests
 import io
+import os
 from PIL import Image
 from datetime import datetime
 import time
+from dotenv import load_dotenv
 
-# Hugging Face Stable Diffusion endpoint (FREE, no API key needed)
+# Load environment variables
+load_dotenv()
+
+# Hugging Face Stable Diffusion endpoint (FREE but requires token)
 HF_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
+HF_TOKEN = os.getenv('HUGGING_FACE_TOKEN')
 
 def test_ai_image_generation():
     """Test Stable Diffusion API and save a sample image"""
     print("=" * 60)
     print("AI IMAGE GENERATION TEST")
     print("=" * 60)
+
+    # Check token
+    if not HF_TOKEN:
+        print("\n❌ ERROR: No HUGGING_FACE_TOKEN found in .env!")
+        print("\n📝 To fix:")
+        print("   1. Go to: https://huggingface.co/settings/tokens")
+        print("   2. Create a free token (Read access is enough)")
+        print("   3. Add to .env file: HUGGING_FACE_TOKEN=hf_...")
+        print("   4. Run this test again")
+        return False, None
+
+    print(f"\n✅ HF Token found: {HF_TOKEN[:10]}...{HF_TOKEN[-5:]}")
 
     # Test prompt (simulating what the system generates from hashtags)
     # Example hashtags: ['AI', 'healthcare', 'technology']
@@ -28,7 +50,10 @@ def test_ai_image_generation():
     print(f"\n💡 This simulates what happens when hashtags: ['AI', 'healthcare', 'technology']")
     print(f"\n🔄 Calling Stable Diffusion API...")
 
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json"
+    }
     payload = {"inputs": prompt}
 
     retries = 3

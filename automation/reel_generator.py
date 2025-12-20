@@ -83,26 +83,33 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, hf_token: Optional[str] = None):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
             use_ai: Use AI image generation (Stable Diffusion) instead of basic text overlay
+            hf_token: Hugging Face API token (REQUIRED for AI - get free at https://huggingface.co/settings/tokens)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
 
         self.output_dir = output_dir
         self.use_ai = use_ai
+        self.hf_token = hf_token
         os.makedirs(output_dir, exist_ok=True)
 
         # Hugging Face Inference API endpoint for Stable Diffusion
         self.hf_api_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1"
-        # Free API - no key needed, but has rate limits
 
-        print(f"[REEL GENERATOR] Initialized with output dir: {output_dir}, AI: {use_ai}", flush=True)
+        if use_ai and not hf_token:
+            print(f"[REEL GENERATOR] ⚠️  WARNING: AI generation enabled but NO HF TOKEN!", flush=True)
+            print(f"[REEL GENERATOR] ⚠️  Get free token: https://huggingface.co/settings/tokens", flush=True)
+            print(f"[REEL GENERATOR] ⚠️  Set HUGGING_FACE_TOKEN in .env file", flush=True)
+            print(f"[REEL GENERATOR] ⚠️  AI generation will FAIL without token!", flush=True)
+
+        print(f"[REEL GENERATOR] Initialized: AI={use_ai}, HF Token={'✅ Set' if hf_token else '❌ MISSING'}", flush=True)
 
     def _generate_ai_image(self, prompt: str, retries: int = 3) -> Optional[Image.Image]:
         """
@@ -115,9 +122,16 @@ class ReelGenerator:
         Returns:
             PIL Image object or None if failed
         """
+        if not self.hf_token:
+            print(f"[AI IMAGE] ❌ No HF token - skipping AI generation", flush=True)
+            return None
+
         print(f"[AI IMAGE] Generating with prompt: {prompt[:100]}...", flush=True)
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {self.hf_token}",
+            "Content-Type": "application/json"
+        }
         payload = {"inputs": prompt}
 
         for attempt in range(retries):
@@ -511,18 +525,19 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, hf_token: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
         use_ai: Use AI image generation (Stable Diffusion) for professional images
+        hf_token: Hugging Face API token (required for AI generation)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai)
+        return ReelGenerator(output_dir, use_ai=use_ai, hf_token=hf_token)
     else:
         return MockReelGenerator(output_dir)
