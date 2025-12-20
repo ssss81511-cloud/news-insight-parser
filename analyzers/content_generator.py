@@ -265,13 +265,15 @@ class ContentGenerator:
 Включи конкретные примеры и данные из исходных постов.
 Сделай пост интересным и ценным для основателей стартапов и предпринимателей.
 
-ВАЖНО: Пиши ТОЛЬКО на русском языке!
+ВАЖНО:
+- Пиши текст поста ТОЛЬКО на русском языке!
+- Хэштеги генерируй ТОЛЬКО на АНГЛИЙСКОМ (для AI image generation)
 
 Верни ТОЛЬКО валидный JSON:
 {{
     "title": "Короткий цепляющий заголовок",
     "content": "Полный текст поста (1000-1500 символов)",
-    "hashtags": ["хэштег1", "хэштег2", ...],
+    "hashtags": ["EnglishHashtag1", "EnglishHashtag2", ...],
     "key_points": ["тезис1", "тезис2", "тезис3"]
 }}"""
         else:
@@ -333,12 +335,14 @@ Return ONLY valid JSON:
 - Тон: {tone_ru}
 - Используй эмодзи стратегически (2-3 максимум)
 
-ВАЖНО: Пиши ТОЛЬКО на русском языке!
+ВАЖНО:
+- Пиши текст ТОЛЬКО на русском языке!
+- Хэштеги генерируй ТОЛЬКО на АНГЛИЙСКОМ (для AI image generation)
 
 Верни ТОЛЬКО валидный JSON:
 {{
     "content": "Полный текст для рилса (100-200 символов)",
-    "hashtags": ["хэштег1", "хэштег2", "хэштег3"]
+    "hashtags": ["EnglishHashtag1", "EnglishHashtag2", "EnglishHashtag3"]
 }}"""
         else:
             prompt = f"""You are a viral content creator writing in English.
@@ -393,7 +397,9 @@ Return ONLY valid JSON:
 Тон: {tone_ru}
 Сделай тред увлекательным и достойным ретвита
 
-ВАЖНО: Пиши ТОЛЬКО на русском языке!
+ВАЖНО:
+- Пиши текст твитов ТОЛЬКО на русском языке!
+- Хэштеги генерируй ТОЛЬКО на АНГЛИЙСКОМ (для AI image generation)
 
 Верни ТОЛЬКО валидный JSON:
 {{
@@ -406,7 +412,7 @@ Return ONLY valid JSON:
         "Текст твита 6",
         "Текст твита 7"
     ],
-    "hashtags": ["хэштег1", "хэштег2", "хэштег3"]
+    "hashtags": ["EnglishHashtag1", "EnglishHashtag2", "EnglishHashtag3"]
 }}"""
         else:
             prompt = f"""You are a Twitter/X thought leader writing in English.
