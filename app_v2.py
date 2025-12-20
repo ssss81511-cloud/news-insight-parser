@@ -650,6 +650,48 @@ def delete_content(content_id):
 
 
 # ============================================================
+# TEST DASHBOARD
+# ============================================================
+
+@app.route('/test-dashboard')
+def test_dashboard():
+    """Визуальный интерфейс для тестирования системы"""
+    return render_template('test_dashboard.html')
+
+
+@app.route('/api/posts/count')
+def get_posts_count():
+    """Get total count of posts in database"""
+    try:
+        from storage.universal_models import UniversalPost
+        count = db.session.query(UniversalPost).count()
+        return jsonify({'count': count})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/topics')
+def get_topics():
+    """Get all topics from analytics"""
+    try:
+        from storage.universal_models import Topic
+        topics = db.session.query(Topic).all()
+        result = []
+        for topic in topics:
+            result.append({
+                'id': topic.id,
+                'keywords': json.loads(topic.keywords) if topic.keywords else [],
+                'post_count': topic.post_count,
+                'avg_importance': float(topic.avg_importance) if topic.avg_importance else 0,
+                'is_trending': topic.is_trending,
+                'created_at': topic.created_at.isoformat() if topic.created_at else None
+            })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================
 # AUTOMATION API ENDPOINTS
 # ============================================================
 
