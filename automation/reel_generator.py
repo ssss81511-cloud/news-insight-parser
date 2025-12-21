@@ -101,9 +101,9 @@ class ReelGenerator:
         self.pexels_key = pexels_key
         os.makedirs(output_dir, exist_ok=True)
 
-        # Custom font and background paths
-        self.custom_font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'шрифт', 'CorrectionBrush.otf')
-        self.custom_background_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'фон для постов.png')
+        # Custom font and background paths (ASCII names for Linux compatibility)
+        self.custom_font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts', 'CorrectionBrush.otf')
+        self.custom_background_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'background.png')
 
         # Check if custom assets exist
         if os.path.exists(self.custom_font_path):
