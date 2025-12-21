@@ -430,10 +430,18 @@ class ReelGenerator:
         search_keywords = keywords if keywords else []
         img = None
 
+        print(f"[REEL] 🔍 Image mode: {self.image_mode}", flush=True)
+        print(f"[REEL] 🔑 FAL key: {'✅ SET (' + self.fal_key[:20] + '...)' if self.fal_key else '❌ NOT SET'}", flush=True)
+
         if self.image_mode == 'ai_generate':
-            # AI Image Generation (HuggingFace FLUX)
-            print(f"[REEL] 🎨 AI Image Generation mode", flush=True)
+            # AI Image Generation (FAL.ai FLUX)
+            print(f"[REEL] 🎨 Starting AI Image Generation (FAL.ai)", flush=True)
             img = self._generate_ai_image(title, search_keywords)
+
+            if img:
+                print(f"[REEL] ✅ AI generation SUCCESS!", flush=True)
+            else:
+                print(f"[REEL] ❌ AI generation FAILED - falling back to stock photos", flush=True)
 
             if img:
                 # Resize to target dimensions

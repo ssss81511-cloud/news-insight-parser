@@ -86,8 +86,12 @@ logger = logging.getLogger(__name__)
 
 # Initialize automation components
 topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
+
 # IMPORTANT: use_ai=True enables AI image generation (FAL.ai) or stock photos (Pexels)
 # Priority: FAL.ai AI (ultra-fast) > Pexels Stock > Gradient Fallback
+print(f"[STARTUP] FAL_API_KEY: {'✅ SET' if FAL_API_KEY else '❌ NOT SET'}", flush=True)
+print(f"[STARTUP] PEXELS_API_KEY: {'✅ SET' if PEXELS_API_KEY else '❌ NOT SET'}", flush=True)
+
 reel_generator = create_reel_generator(
     output_dir='generated_reels',
     use_ai=True,

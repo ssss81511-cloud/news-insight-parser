@@ -305,18 +305,27 @@ class TelegramPoster:
 
         # Hashtags
         hashtags = content.get('hashtags', [])
+        print(f"[TELEGRAM POSTER] Raw hashtags: {hashtags} (type: {type(hashtags)})", flush=True)
+
         if hashtags:
             if isinstance(hashtags, str):
                 try:
                     hashtags = json.loads(hashtags)
+                    print(f"[TELEGRAM POSTER] Parsed hashtags from JSON: {hashtags}", flush=True)
                 except:
                     hashtags = hashtags.split()
+                    print(f"[TELEGRAM POSTER] Split hashtags from string: {hashtags}", flush=True)
 
-            if hashtags:
+            if hashtags and len(hashtags) > 0:
                 parts.append("")  # Empty line
                 # Format hashtags with # symbol
                 formatted_hashtags = [f'#{tag.lstrip("#")}' for tag in hashtags]
+                print(f"[TELEGRAM POSTER] Adding hashtags to message: {formatted_hashtags}", flush=True)
                 parts.append(' '.join(formatted_hashtags))
+            else:
+                print(f"[TELEGRAM POSTER] ⚠️ Hashtags list is empty after parsing!", flush=True)
+        else:
+            print(f"[TELEGRAM POSTER] ⚠️ No hashtags in content!", flush=True)
 
         return '\n'.join(parts)
 
