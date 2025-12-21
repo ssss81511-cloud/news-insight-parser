@@ -72,7 +72,8 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')  # For stock photo fallback - get free at https://www.pexels.com/api/
 AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
-AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
+# Support multiple hours per day: "9,14,20" for morning, afternoon, evening
+AUTO_GENERATE_HOURS = os.getenv('AUTO_GENERATE_HOURS', '9')  # Can be single "9" or multiple "9,14,20"
 AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
 
 # Configure logging for automation
@@ -783,11 +784,17 @@ def get_automation_status():
                 'trigger': str(job.trigger)
             })
 
+    # Parse hours for display
+    schedule_times = None
+    if AUTO_GENERATE_ENABLED:
+        hours = [int(h.strip()) for h in AUTO_GENERATE_HOURS.split(',')]
+        schedule_times = ', '.join([f"{h:02d}:{AUTO_GENERATE_MINUTE:02d}" for h in hours])
+
     return jsonify({
         'enabled': automation_scheduler_enabled,
         'configured': auto_system is not None,
         'telegram_enabled': telegram_poster is not None,
-        'schedule': f"{AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}" if AUTO_GENERATE_ENABLED else None,
+        'schedule': schedule_times,
         'jobs': jobs,
         'config': auto_system.config if auto_system else None
     })
@@ -805,23 +812,31 @@ def enable_automation():
         }), 500
 
     try:
-        # Add scheduled job if not already added
+        # Add scheduled job(s) if not already added - supports multiple times per day
         if not automation_scheduler_enabled:
-            automation_scheduler.add_job(
-                func=scheduled_content_generation,
-                trigger='cron',
-                hour=AUTO_GENERATE_HOUR,
-                minute=AUTO_GENERATE_MINUTE,
-                id='daily_content_generation',
-                name='Daily automated content generation',
-                replace_existing=True
-            )
-            automation_scheduler_enabled = True
-            logger.info(f"Automation enabled - Will run daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}")
+            # Parse hours - can be single "9" or multiple "9,14,20"
+            hours = [int(h.strip()) for h in AUTO_GENERATE_HOURS.split(',')]
 
+            # Create a job for each hour
+            for idx, hour in enumerate(hours):
+                automation_scheduler.add_job(
+                    func=scheduled_content_generation,
+                    trigger='cron',
+                    hour=hour,
+                    minute=AUTO_GENERATE_MINUTE,
+                    id=f'content_generation_{idx}',
+                    name=f'Automated content generation at {hour:02d}:{AUTO_GENERATE_MINUTE:02d}',
+                    replace_existing=True
+                )
+
+            automation_scheduler_enabled = True
+            times_str = ', '.join([f"{h:02d}:{AUTO_GENERATE_MINUTE:02d}" for h in hours])
+            logger.info(f"Automation enabled - Will run {len(hours)}x daily at {times_str}")
+
+        times_str = ', '.join([f"{int(h.strip()):02d}:{AUTO_GENERATE_MINUTE:02d}" for h in AUTO_GENERATE_HOURS.split(',')])
         return jsonify({
             'status': 'success',
-            'message': f'Automation enabled - Runs daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}'
+            'message': f'Automation enabled - Runs daily at {times_str}'
         })
     except Exception as e:
         logger.error(f"Failed to enable automation: {e}", exc_info=True)
@@ -1002,20 +1017,27 @@ def init_app():
     automation_scheduler.start()
     logger.info("Automation scheduler started")
 
-    # Add automation job if enabled
+    # Add automation job(s) if enabled - supports multiple times per day
     if AUTO_GENERATE_ENABLED and auto_system:
         try:
-            automation_scheduler.add_job(
-                func=scheduled_content_generation,
-                trigger='cron',
-                hour=AUTO_GENERATE_HOUR,
-                minute=AUTO_GENERATE_MINUTE,
-                id='daily_content_generation',
-                name='Daily automated content generation',
-                replace_existing=True
-            )
+            # Parse hours - can be single "9" or multiple "9,14,20"
+            hours = [int(h.strip()) for h in AUTO_GENERATE_HOURS.split(',')]
+
+            # Create a job for each hour
+            for idx, hour in enumerate(hours):
+                automation_scheduler.add_job(
+                    func=scheduled_content_generation,
+                    trigger='cron',
+                    hour=hour,
+                    minute=AUTO_GENERATE_MINUTE,
+                    id=f'content_generation_{idx}',
+                    name=f'Automated content generation at {hour:02d}:{AUTO_GENERATE_MINUTE:02d}',
+                    replace_existing=True
+                )
+
             automation_scheduler_enabled = True
-            logger.info(f"[AUTOMATION] Auto-generate: ON | Schedule: Daily at {AUTO_GENERATE_HOUR:02d}:{AUTO_GENERATE_MINUTE:02d}")
+            times_str = ', '.join([f"{h:02d}:{AUTO_GENERATE_MINUTE:02d}" for h in hours])
+            logger.info(f"[AUTOMATION] Auto-generate: ON | Schedule: {len(hours)}x daily at {times_str}")
         except Exception as e:
             logger.error(f"Failed to schedule automation: {e}")
     else:

@@ -33,11 +33,11 @@ services:
           name: news-insight-db
           property: connectionString
 
-      # Automation Settings
+      # Automation Settings (3x daily: morning, afternoon, evening)
       - key: AUTO_GENERATE_ENABLED
         value: true
-      - key: AUTO_GENERATE_HOUR
-        value: 9
+      - key: AUTO_GENERATE_HOURS
+        value: 9,14,20  # 09:00 (morning), 14:00 (afternoon), 20:00 (evening)
       - key: AUTO_GENERATE_MINUTE
         value: 0
 
