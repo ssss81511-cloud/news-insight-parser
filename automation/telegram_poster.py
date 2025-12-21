@@ -113,36 +113,53 @@ class TelegramPoster:
         Returns:
             Result dictionary
         """
-        # Build message text
-        message_text = self._format_message(content)
+        # Build message text WITHOUT hashtags first
+        message_text = self._format_message(content, include_hashtags=False)
+
+        # Format hashtags separately
+        hashtags_text = self._format_hashtags(content)
 
         # Telegram limits:
         # - Photo caption: 1024 characters MAX
         # - Text message: 4096 characters MAX
-        if media_path and len(message_text) > 1024:
-            print(f"[TELEGRAM POSTER] Caption too long ({len(message_text)} chars), truncating to 1020...", flush=True)
-            # Smart truncation - try to cut at sentence boundary
-            truncated = message_text[:1020]
+
+        # Reserve space for hashtags
+        max_content_length = 1024 if media_path else 4096
+        hashtags_length = len(hashtags_text) + 2  # +2 for \n\n separator
+
+        if media_path and len(message_text) + hashtags_length > 1024:
+            # Truncate content to fit with hashtags
+            available_space = 1024 - hashtags_length - 10  # Reserve 10 chars for safety
+            print(f"[TELEGRAM POSTER] Caption too long ({len(message_text)} chars), truncating to fit hashtags...", flush=True)
+
+            truncated = message_text[:available_space]
             # Find last sentence ending
             last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
-            if last_period > 900:  # If we can cut at sentence, do it
+            if last_period > available_space - 100:
                 message_text = truncated[:last_period+1]
             else:
-                message_text = truncated[:1017] + "..."
-        elif len(message_text) > 4096:
-            print(f"[TELEGRAM POSTER] Message too long ({len(message_text)} chars), truncating to 4090...", flush=True)
-            # Smart truncation - try to cut at paragraph boundary
-            truncated = message_text[:4090]
-            # Find last paragraph or sentence
+                message_text = truncated[:available_space-3] + "..."
+
+        elif len(message_text) + hashtags_length > 4096:
+            # Truncate content to fit with hashtags
+            available_space = 4096 - hashtags_length - 10
+            print(f"[TELEGRAM POSTER] Message too long ({len(message_text)} chars), truncating to fit hashtags...", flush=True)
+
+            truncated = message_text[:available_space]
             last_newline = truncated.rfind('\n\n')
             last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
 
-            if last_newline > 3800:  # Cut at paragraph
+            if last_newline > available_space - 200:
                 message_text = truncated[:last_newline]
-            elif last_period > 3800:  # Cut at sentence
+            elif last_period > available_space - 200:
                 message_text = truncated[:last_period+1]
             else:
-                message_text = truncated[:4087] + "..."
+                message_text = truncated[:available_space-3] + "..."
+
+        # Add hashtags at the end (AFTER truncation)
+        if hashtags_text:
+            message_text = message_text + "\n\n" + hashtags_text
+            print(f"[TELEGRAM POSTER] ✅ Final message length: {len(message_text)} chars (with hashtags)", flush=True)
 
         # Post with retries
         for attempt in range(self.max_retries):
@@ -272,7 +289,35 @@ class TelegramPoster:
         else:
             raise Exception(f"Failed to post thread: {'; '.join(errors)}")
 
-    def _format_message(self, content: Dict) -> str:
+    def _format_hashtags(self, content: Dict) -> str:
+        """
+        Format hashtags for Telegram
+
+        Args:
+            content: Content dictionary
+
+        Returns:
+            Formatted hashtags string
+        """
+        hashtags = content.get('hashtags', [])
+
+        if not hashtags:
+            return ""
+
+        if isinstance(hashtags, str):
+            try:
+                hashtags = json.loads(hashtags)
+            except:
+                hashtags = hashtags.split()
+
+        if hashtags and len(hashtags) > 0:
+            # Format hashtags with # symbol
+            formatted_hashtags = [f'#{tag.lstrip("#")}' for tag in hashtags]
+            return ' '.join(formatted_hashtags)
+
+        return ""
+
+    def _format_message(self, content: Dict, include_hashtags: bool = True) -> str:
         """
         Format content for Telegram posting
 
@@ -280,6 +325,7 @@ class TelegramPoster:
 
         Args:
             content: Content dictionary
+            include_hashtags: Whether to include hashtags in message
 
         Returns:
             Formatted message text
@@ -303,29 +349,12 @@ class TelegramPoster:
             main_content = main_content.replace('**', '<b>').replace('**', '</b>')
             parts.append(main_content)
 
-        # Hashtags
-        hashtags = content.get('hashtags', [])
-        print(f"[TELEGRAM POSTER] Raw hashtags: {hashtags} (type: {type(hashtags)})", flush=True)
-
-        if hashtags:
-            if isinstance(hashtags, str):
-                try:
-                    hashtags = json.loads(hashtags)
-                    print(f"[TELEGRAM POSTER] Parsed hashtags from JSON: {hashtags}", flush=True)
-                except:
-                    hashtags = hashtags.split()
-                    print(f"[TELEGRAM POSTER] Split hashtags from string: {hashtags}", flush=True)
-
-            if hashtags and len(hashtags) > 0:
+        # Hashtags (only if requested)
+        if include_hashtags:
+            hashtags_text = self._format_hashtags(content)
+            if hashtags_text:
                 parts.append("")  # Empty line
-                # Format hashtags with # symbol
-                formatted_hashtags = [f'#{tag.lstrip("#")}' for tag in hashtags]
-                print(f"[TELEGRAM POSTER] Adding hashtags to message: {formatted_hashtags}", flush=True)
-                parts.append(' '.join(formatted_hashtags))
-            else:
-                print(f"[TELEGRAM POSTER] ⚠️ Hashtags list is empty after parsing!", flush=True)
-        else:
-            print(f"[TELEGRAM POSTER] ⚠️ No hashtags in content!", flush=True)
+                parts.append(hashtags_text)
 
         return '\n'.join(parts)
 

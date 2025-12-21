@@ -167,11 +167,31 @@ class ReelGenerator:
 
             if response.status_code == 200:
                 result = response.json()
+                print(f"[AI GEN] 📦 FAL Response keys: {list(result.keys())}", flush=True)
 
-                # FAL returns image URL
+                # FAL can return different formats - check both
+                image_url = None
+
+                # Format 1: {'images': [{'url': '...'}]}
                 if 'images' in result and len(result['images']) > 0:
-                    image_url = result['images'][0]['url']
-                    print(f"[AI GEN] ⬇️  Downloading from FAL...", flush=True)
+                    if isinstance(result['images'][0], dict):
+                        image_url = result['images'][0].get('url')
+                    else:
+                        image_url = result['images'][0]
+
+                # Format 2: {'image': {'url': '...'}}
+                elif 'image' in result:
+                    if isinstance(result['image'], dict):
+                        image_url = result['image'].get('url')
+                    else:
+                        image_url = result['image']
+
+                # Format 3: Direct URL in response
+                elif 'url' in result:
+                    image_url = result['url']
+
+                if image_url:
+                    print(f"[AI GEN] ⬇️  Downloading from FAL: {image_url[:50]}...", flush=True)
 
                     # Download image
                     img_response = requests.get(image_url, timeout=15)
@@ -180,10 +200,10 @@ class ReelGenerator:
                         print(f"[AI GEN] ✅ FAL generated: {image.size} (FAST!)", flush=True)
                         return image
                     else:
-                        print(f"[AI GEN] ❌ Failed to download image", flush=True)
+                        print(f"[AI GEN] ❌ Failed to download image from URL", flush=True)
                         return None
                 else:
-                    print(f"[AI GEN] ❌ No images in response", flush=True)
+                    print(f"[AI GEN] ❌ No image URL in response. Full response: {str(result)[:200]}", flush=True)
                     return None
             else:
                 print(f"[AI GEN] ❌ FAL Error {response.status_code}: {response.text[:200]}", flush=True)
