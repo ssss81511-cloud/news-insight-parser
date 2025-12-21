@@ -71,7 +71,7 @@ scheduler = get_scheduler()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')  # For stock photos - get free at https://www.pexels.com/api/
-HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY')  # For AI image generation - get free at https://huggingface.co/settings/tokens
+FAL_API_KEY = os.getenv('FAL_API_KEY')  # For AI image generation - ultra-fast FLUX (get at https://fal.ai/)
 AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
 AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
 AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
@@ -86,13 +86,13 @@ logger = logging.getLogger(__name__)
 
 # Initialize automation components
 topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
-# IMPORTANT: use_ai=True enables AI image generation (HuggingFace) or stock photos (Pexels)
-# Priority: HuggingFace AI > Pexels Stock > Gradient Fallback
+# IMPORTANT: use_ai=True enables AI image generation (FAL.ai) or stock photos (Pexels)
+# Priority: FAL.ai AI (ultra-fast) > Pexels Stock > Gradient Fallback
 reel_generator = create_reel_generator(
     output_dir='generated_reels',
     use_ai=True,
     pexels_key=PEXELS_API_KEY,
-    huggingface_key=HUGGINGFACE_API_KEY
+    fal_key=FAL_API_KEY
 )
 
 # Initialize Telegram poster if credentials are provided

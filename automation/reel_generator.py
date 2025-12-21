@@ -84,7 +84,7 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, huggingface_key: Optional[str] = None):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, fal_key: Optional[str] = None):
         """
         Initialize ReelGenerator
 
@@ -92,7 +92,7 @@ class ReelGenerator:
             output_dir: Directory to save generated images
             use_ai: Use AI-generated or professional photos
             pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
-            huggingface_key: HuggingFace API key for AI image generation (get free at https://huggingface.co/settings/tokens)
+            fal_key: FAL.ai API key for AI image generation (get at https://fal.ai/)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
@@ -100,24 +100,24 @@ class ReelGenerator:
         self.output_dir = output_dir
         self.use_ai = use_ai
         self.pexels_key = pexels_key
-        self.huggingface_key = huggingface_key
+        self.fal_key = fal_key
         os.makedirs(output_dir, exist_ok=True)
 
         # APIs
         self.pexels_api_url = "https://api.pexels.com/v1/search"
-        self.hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"  # Fast Flux model
+        self.fal_api_url = "https://queue.fal.run/fal-ai/flux/schnell"  # Fast FLUX model on FAL
 
         # Determine image generation mode
         if use_ai:
-            if huggingface_key:
-                print(f"[REEL GENERATOR] ✅ AI Image Generation ENABLED (HuggingFace FLUX)", flush=True)
+            if fal_key:
+                print(f"[REEL GENERATOR] ✅ AI Image Generation ENABLED (FAL.ai FLUX)", flush=True)
                 self.image_mode = 'ai_generate'
             elif pexels_key:
                 print(f"[REEL GENERATOR] ✅ Stock Photos ENABLED (Pexels)", flush=True)
                 self.image_mode = 'stock_photos'
             else:
                 print(f"[REEL GENERATOR] ⚠️  No API keys - using gradient fallback", flush=True)
-                print(f"[REEL GENERATOR] ℹ️  Get HuggingFace key: https://huggingface.co/settings/tokens", flush=True)
+                print(f"[REEL GENERATOR] ℹ️  Get FAL.ai key: https://fal.ai/dashboard/keys", flush=True)
                 print(f"[REEL GENERATOR] ℹ️  Get Pexels key: https://www.pexels.com/api/", flush=True)
                 self.image_mode = 'gradient'
         else:
@@ -126,7 +126,7 @@ class ReelGenerator:
 
     def _generate_ai_image(self, title: str, keywords: List[str]) -> Optional[Image.Image]:
         """
-        Generate image using HuggingFace Inference API (FLUX model)
+        Generate image using FAL.ai FLUX API (ultra-fast)
 
         Args:
             title: Content title
@@ -135,50 +135,64 @@ class ReelGenerator:
         Returns:
             PIL Image or None if failed
         """
-        if not self.huggingface_key:
-            print(f"[AI GEN] No HuggingFace key - skipping", flush=True)
+        if not self.fal_key:
+            print(f"[AI GEN] No FAL.ai key - skipping", flush=True)
             return None
 
         # Create optimized prompt
         prompt = self._create_ai_prompt(title, keywords)
-        print(f"[AI GEN] Generating image with prompt: {prompt[:100]}...", flush=True)
+        print(f"[AI GEN] 🎨 FAL.ai generating: {prompt[:80]}...", flush=True)
 
         try:
             headers = {
-                "Authorization": f"Bearer {self.huggingface_key}"
+                "Authorization": f"Key {self.fal_key}",
+                "Content-Type": "application/json"
             }
 
             payload = {
-                "inputs": prompt,
-                "parameters": {
-                    "guidance_scale": 3.5,  # Lower for FLUX
-                    "num_inference_steps": 4,  # Fast FLUX model needs only 4 steps
-                    "width": 1024,
-                    "height": 1024
-                }
+                "prompt": prompt,
+                "image_size": "square",  # 1024x1024
+                "num_inference_steps": 4,  # Fast FLUX schnell
+                "num_images": 1,
+                "enable_safety_checker": False  # For speed
             }
 
+            # FAL uses queue system for fast async processing
             response = requests.post(
-                self.hf_api_url,
+                self.fal_api_url,
                 headers=headers,
                 json=payload,
-                timeout=60  # AI generation can take time
+                timeout=30  # FAL is very fast (2-3 seconds)
             )
 
             if response.status_code == 200:
-                # Response is image bytes
-                image = Image.open(io.BytesIO(response.content))
-                print(f"[AI GEN] ✅ Generated image: {image.size}", flush=True)
-                return image
-            elif response.status_code == 503:
-                print(f"[AI GEN] ⚠️  Model loading (503) - try again in 20s or use fallback", flush=True)
-                return None
+                result = response.json()
+
+                # FAL returns image URL
+                if 'images' in result and len(result['images']) > 0:
+                    image_url = result['images'][0]['url']
+                    print(f"[AI GEN] ⬇️  Downloading from FAL...", flush=True)
+
+                    # Download image
+                    img_response = requests.get(image_url, timeout=15)
+                    if img_response.status_code == 200:
+                        image = Image.open(io.BytesIO(img_response.content))
+                        print(f"[AI GEN] ✅ FAL generated: {image.size} (FAST!)", flush=True)
+                        return image
+                    else:
+                        print(f"[AI GEN] ❌ Failed to download image", flush=True)
+                        return None
+                else:
+                    print(f"[AI GEN] ❌ No images in response", flush=True)
+                    return None
             else:
-                print(f"[AI GEN] ❌ Error {response.status_code}: {response.text[:200]}", flush=True)
+                print(f"[AI GEN] ❌ FAL Error {response.status_code}: {response.text[:200]}", flush=True)
                 return None
 
         except Exception as e:
             print(f"[AI GEN] ❌ Exception: {e}", flush=True)
+            import traceback
+            print(f"[AI GEN] Traceback: {traceback.format_exc()[:300]}", flush=True)
             return None
 
     def _create_ai_prompt(self, title: str, keywords: List[str]) -> str:
@@ -745,7 +759,7 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, huggingface_key: Optional[str] = None):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, fal_key: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
@@ -753,12 +767,12 @@ def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = Tr
         output_dir: Directory for generated images
         use_ai: Use AI-generated images or professional stock photos instead of gradients
         pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
-        huggingface_key: HuggingFace API key for AI image generation (get free at https://huggingface.co/settings/tokens)
+        fal_key: FAL.ai API key for AI image generation (ultra-fast FLUX, get at https://fal.ai/)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key, huggingface_key=huggingface_key)
+        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key, fal_key=fal_key)
     else:
         return MockReelGenerator(output_dir)

@@ -18,8 +18,8 @@ services:
         sync: false  # Установишь вручную в Dashboard
 
       # Image Generation (Optional - для AI картинок)
-      - key: HUGGINGFACE_API_KEY
-        sync: false  # Get free at https://huggingface.co/settings/tokens
+      - key: FAL_API_KEY
+        sync: false  # Ultra-fast FLUX AI generation - get at https://fal.ai/dashboard/keys
       - key: PEXELS_API_KEY
         sync: false  # Fallback для stock фото - get free at https://www.pexels.com/api/
 
