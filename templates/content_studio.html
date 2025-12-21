@@ -476,8 +476,21 @@ function displayGeneratedContent(content) {
         html += `<p>${content.content}</p>`;
     }
 
-    if (content.hashtags && content.hashtags.length > 0) {
-        html += `<hr><p style="color: #007bff;">${content.hashtags.join(' ')}</p>`;
+    // Parse hashtags if they come as JSON string
+    let hashtags = content.hashtags;
+    if (hashtags) {
+        if (typeof hashtags === 'string') {
+            try {
+                hashtags = JSON.parse(hashtags);
+            } catch (e) {
+                // If not JSON, split by spaces
+                hashtags = hashtags.split(/\s+/);
+            }
+        }
+
+        if (Array.isArray(hashtags) && hashtags.length > 0) {
+            html += `<hr><p style="color: #007bff;">${hashtags.join(' ')}</p>`;
+        }
     }
 
     preview.innerHTML = html;
@@ -501,8 +514,20 @@ document.getElementById('copy-btn').addEventListener('click', function() {
         text += content.content;
     }
 
-    if (content.hashtags && content.hashtags.length > 0) {
-        text += '\n\n' + content.hashtags.join(' ');
+    // Parse hashtags if they come as JSON string
+    let hashtags = content.hashtags;
+    if (hashtags) {
+        if (typeof hashtags === 'string') {
+            try {
+                hashtags = JSON.parse(hashtags);
+            } catch (e) {
+                hashtags = hashtags.split(/\s+/);
+            }
+        }
+
+        if (Array.isArray(hashtags) && hashtags.length > 0) {
+            text += '\n\n' + hashtags.join(' ');
+        }
     }
 
     navigator.clipboard.writeText(text).then(() => {
