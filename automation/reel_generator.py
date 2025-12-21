@@ -170,30 +170,36 @@ class ReelGenerator:
         """
         Create optimized prompt for AI image generation
 
+        IMPORTANT: Prompts MUST be abstract/visual only to prevent text generation in images.
+        Avoid words like: "about", "for", "illustration", "infographic", "text", "words"
+
         Args:
             title: Content title
             keywords: Topic keywords
 
         Returns:
-            Optimized prompt for FLUX/Stable Diffusion
+            Optimized prompt for FLUX/Stable Diffusion (VISUAL ONLY)
         """
-        # Extract main topic from keywords
-        topic = ', '.join(keywords[:3]) if keywords else title[:50]
-
-        # Professional, modern prompts for tech/business content
+        # Create abstract, purely visual prompts (NO text/words in images!)
         prompts = [
-            f"Modern minimalist illustration about {topic}, professional design, vibrant gradient background, clean geometric shapes, tech aesthetic, high quality digital art",
-            f"Abstract tech visualization for {topic}, futuristic style, glowing elements, deep blue and purple tones, professional corporate design, 4k quality",
-            f"Sleek business graphic about {topic}, modern flat design, bold colors, professional layout, startup aesthetic, digital illustration",
-            f"Contemporary tech artwork for {topic}, minimalist style, vibrant accents, clean composition, professional branding, high-end design",
-            f"Professional infographic style image about {topic}, modern color palette, abstract geometric patterns, tech industry aesthetic, premium quality"
+            "abstract geometric shapes, vibrant gradient background, modern tech aesthetic, floating particles, deep blue purple cyan colors, clean minimalist design, 4k digital art",
+            "futuristic technology concept, glowing neon elements, dark background with light rays, sleek professional style, cyberpunk aesthetic, high quality render",
+            "modern gradient waves, smooth flowing curves, bold vibrant colors, professional corporate design, abstract patterns, contemporary art style, premium quality",
+            "geometric low poly background, triangular shapes, gradient mesh, tech startup aesthetic, clean composition, modern color palette, digital illustration",
+            "abstract bokeh lights, defocused particles, deep space atmosphere, glowing orbs, professional dark theme, cinematic lighting, 4k wallpaper quality",
+            "fluid gradients, organic shapes, vibrant color transitions, modern minimalist aesthetic, smooth flowing forms, professional branding style, high-end design",
+            "circuit board patterns, technology background, glowing connections, abstract digital network, dark blue tones, futuristic concept, premium render",
+            "abstract light beams, colorful rays, modern tech background, dynamic energy flow, professional gradient design, clean geometric elements, high quality",
         ]
 
         # Rotate through prompts based on title hash for variety
         import hashlib
         index = int(hashlib.md5(title.encode()).hexdigest(), 16) % len(prompts)
 
-        return prompts[index]
+        selected_prompt = prompts[index]
+        print(f"[AI PROMPT] Using visual-only prompt (NO text generation): {selected_prompt[:60]}...", flush=True)
+
+        return selected_prompt
 
     def _fetch_pexels_photo(self, keywords: List[str]) -> Optional[Image.Image]:
         """
@@ -416,12 +422,12 @@ class ReelGenerator:
             if img:
                 # Resize to target dimensions
                 img = img.resize((width, height), Image.Resampling.LANCZOS)
-                # Add overlay for text readability
-                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
+                # Add stronger overlay for text readability (darker background = better contrast)
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 150))  # Increased from 120 to 150
                 img = img.convert('RGBA')
                 img = Image.alpha_composite(img, overlay)
                 img = img.convert('RGB')
-                print(f"[REEL] ✅ Using AI-generated image", flush=True)
+                print(f"[REEL] ✅ Using AI-generated image with enhanced text overlay", flush=True)
 
         if img is None and self.image_mode in ['ai_generate', 'stock_photos']:
             # Stock Photos (Pexels) - fallback or primary
@@ -430,11 +436,11 @@ class ReelGenerator:
 
             if photo:
                 img = photo.resize((width, height), Image.Resampling.LANCZOS)
-                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 130))  # Increased from 100 to 130
                 img = img.convert('RGBA')
                 img = Image.alpha_composite(img, overlay)
                 img = img.convert('RGB')
-                print(f"[REEL] ✅ Using Pexels stock photo", flush=True)
+                print(f"[REEL] ✅ Using Pexels stock photo with enhanced text overlay", flush=True)
 
         if img is None:
             # Gradient fallback (final fallback or primary if no AI/photos)
@@ -478,7 +484,7 @@ class ReelGenerator:
         # Calculate layout
         y_pos = margin + 30
 
-        # Draw title
+        # Draw title with professional outline and shadow
         title_wrapped = self._wrap_text(title, width - 2 * margin, title_font, draw)
         for line in title_wrapped:
             bbox = draw.textbbox((0, 0), line, font=title_font)
@@ -486,9 +492,13 @@ class ReelGenerator:
             text_height = bbox[3] - bbox[1]
             x = (width - text_width) // 2
 
-            # Draw title with shadow for better readability
-            draw.text((x + 3, y_pos + 3), line, fill=(0, 0, 0, 100), font=title_font)
-            draw.text((x, y_pos), line, fill=colors['title'], font=title_font)
+            # Use professional text rendering with outline
+            self._draw_text_with_outline(
+                draw, (x, y_pos), line, title_font,
+                fill_color=colors['title'],
+                outline_width=4,  # Thick outline for title
+                shadow=True
+            )
             y_pos += text_height + 20
 
         # Add accent line
@@ -517,7 +527,7 @@ class ReelGenerator:
                 fill=bullet_color
             )
 
-            # Draw point text
+            # Draw point text with outline for readability
             point_wrapped = self._wrap_text(
                 point,
                 width - 2 * margin - 80,
@@ -527,7 +537,13 @@ class ReelGenerator:
 
             point_x = bullet_x + bullet_radius + 25
             for line in point_wrapped:
-                draw.text((point_x, y_pos), line, fill=colors['text'], font=points_font)
+                # Use professional text rendering with outline
+                self._draw_text_with_outline(
+                    draw, (point_x, y_pos), line, points_font,
+                    fill_color=colors['text'],
+                    outline_width=2,  # Thinner outline for body text
+                    shadow=True
+                )
                 bbox = draw.textbbox((0, 0), line, font=points_font)
                 y_pos += bbox[3] - bbox[1] + 8
 
@@ -542,7 +558,13 @@ class ReelGenerator:
                 bbox = draw.textbbox((0, 0), line, font=footer_font)
                 text_width = bbox[2] - bbox[0]
                 x = (width - text_width) // 2
-                draw.text((x, y_footer), line, fill=colors['accent'], font=footer_font)
+                # Use professional text rendering with outline
+                self._draw_text_with_outline(
+                    draw, (x, y_footer), line, footer_font,
+                    fill_color=colors['accent'],
+                    outline_width=2,
+                    shadow=True
+                )
                 y_footer += bbox[3] - bbox[1] + 10
 
         # Save image
@@ -591,6 +613,38 @@ class ReelGenerator:
         print(f"[WARNING] No system fonts found! Using default font (will look bad)", flush=True)
         print(f"[WARNING] Install fonts: apt-get install fonts-dejavu-core", flush=True)
         return ImageFont.load_default()
+
+    def _draw_text_with_outline(self, draw, position: Tuple[int, int], text: str, font,
+                                fill_color: Tuple[int, int, int], outline_width: int = 3,
+                                shadow: bool = True) -> None:
+        """
+        Draw text with outline and shadow for maximum readability on any background
+
+        Args:
+            draw: ImageDraw object
+            position: (x, y) position
+            text: Text to draw
+            font: Font to use
+            fill_color: RGB color for text
+            outline_width: Width of outline in pixels (default: 3)
+            shadow: Whether to add drop shadow (default: True)
+        """
+        x, y = position
+
+        # Draw shadow first (if enabled)
+        if shadow:
+            shadow_offset = outline_width + 2
+            draw.text((x + shadow_offset, y + shadow_offset), text, fill=(0, 0, 0, 180), font=font)
+
+        # Draw outline by drawing text multiple times in a circle around the position
+        # This creates a thick, smooth outline
+        for offset_x in range(-outline_width, outline_width + 1):
+            for offset_y in range(-outline_width, outline_width + 1):
+                if offset_x != 0 or offset_y != 0:  # Skip center (that's the main text)
+                    draw.text((x + offset_x, y + offset_y), text, fill=(0, 0, 0, 200), font=font)
+
+        # Draw main text on top
+        draw.text((x, y), text, fill=fill_color, font=font)
 
     def _wrap_text(self, text: str, max_width: int, font, draw) -> List[str]:
         """
