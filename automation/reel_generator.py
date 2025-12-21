@@ -101,6 +101,21 @@ class ReelGenerator:
         self.pexels_key = pexels_key
         os.makedirs(output_dir, exist_ok=True)
 
+        # Custom font and background paths
+        self.custom_font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'шрифт', 'CorrectionBrush.otf')
+        self.custom_background_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'фон для постов.png')
+
+        # Check if custom assets exist
+        if os.path.exists(self.custom_font_path):
+            print(f"[REEL GENERATOR] ✅ Custom font loaded: CorrectionBrush.otf", flush=True)
+        else:
+            print(f"[REEL GENERATOR] ⚠️  Custom font not found, using system fonts", flush=True)
+
+        if os.path.exists(self.custom_background_path):
+            print(f"[REEL GENERATOR] ✅ Custom background loaded: фон для постов.png", flush=True)
+        else:
+            print(f"[REEL GENERATOR] ⚠️  Custom background not found", flush=True)
+
         # APIs
         self.pexels_api_url = "https://api.pexels.com/v1/search"
         self.pollinations_base_url = "https://image.pollinations.ai/prompt"  # FREE, no API key needed!
@@ -284,6 +299,39 @@ class ReelGenerator:
             print(f"[PEXELS] Exception: {e}", flush=True)
             return None
 
+    def _load_custom_background(self, width: int, height: int) -> Optional[Image.Image]:
+        """
+        Load custom background image from user's file
+
+        Args:
+            width: Target width
+            height: Target height
+
+        Returns:
+            PIL Image or None if not found
+        """
+        if not os.path.exists(self.custom_background_path):
+            return None
+
+        try:
+            print(f"[CUSTOM BG] Loading custom background: {self.custom_background_path}", flush=True)
+            img = Image.open(self.custom_background_path)
+
+            # Resize to target dimensions
+            img = img.resize((width, height), Image.Resampling.LANCZOS)
+
+            # Add light overlay for text readability
+            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))  # Light overlay
+            img = img.convert('RGBA')
+            img = Image.alpha_composite(img, overlay)
+            img = img.convert('RGB')
+
+            print(f"[CUSTOM BG] ✅ Custom background loaded: {img.size}", flush=True)
+            return img
+        except Exception as e:
+            print(f"[CUSTOM BG] ❌ Failed to load custom background: {e}", flush=True)
+            return None
+
     def _generate_gradient_background(self, keywords: List[str], width: int, height: int) -> Image.Image:
         """
         Generate beautiful gradient background based on keywords
@@ -409,7 +457,15 @@ class ReelGenerator:
 
         print(f"[REEL] 🔍 Image mode: {self.image_mode}", flush=True)
 
-        if self.image_mode == 'ai_generate':
+        # PRIORITY 1: Try custom background FIRST (if exists)
+        if os.path.exists(self.custom_background_path):
+            print(f"[REEL] 🎨 Using custom background (user's image)", flush=True)
+            img = self._load_custom_background(width, height)
+            if img:
+                print(f"[REEL] ✅ Custom background loaded successfully!", flush=True)
+
+        # PRIORITY 2: AI Image Generation (if custom background failed or not available)
+        if img is None and self.image_mode == 'ai_generate':
             # AI Image Generation (Pollinations.ai - FREE!)
             print(f"[REEL] 🎨 Starting AI Image Generation (Pollinations.ai - FREE)", flush=True)
             img = self._generate_ai_image(title, search_keywords)
@@ -581,13 +637,27 @@ class ReelGenerator:
         """
         Get font with proper fallback chain for Linux/Windows compatibility
 
+        Priority:
+        1. Custom font (CorrectionBrush.otf)
+        2. Linux system fonts
+        3. Windows fonts
+        4. Default font
+
         Args:
             size: Font size in points
 
         Returns:
             ImageFont object
         """
-        # Try Linux system fonts (common on Render, Heroku, etc.)
+        # PRIORITY 1: Try custom font first
+        if os.path.exists(self.custom_font_path):
+            try:
+                font = ImageFont.truetype(self.custom_font_path, size)
+                return font
+            except Exception as e:
+                print(f"[REEL] Failed to load custom font: {e}", flush=True)
+
+        # PRIORITY 2: Try Linux system fonts (common on Render, Heroku, etc.)
         linux_fonts = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -603,7 +673,7 @@ class ReelGenerator:
                     print(f"[REEL] Failed to load {font_path}: {e}", flush=True)
                     continue
 
-        # Try Windows fonts
+        # PRIORITY 3: Try Windows fonts
         try:
             return ImageFont.truetype("arial.ttf", size)
         except:
