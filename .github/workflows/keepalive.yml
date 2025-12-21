@@ -2,8 +2,8 @@ name: Keep Render Service Alive
 
 on:
   schedule:
-    # Runs every 10 minutes (Render free tier sleeps after 15 min of inactivity)
-    - cron: '*/10 * * * *'
+    # Runs every 5 minutes to keep Render awake (free tier sleeps after 15 min)
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
@@ -11,20 +11,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Ping Render service
+      - name: Ping Render service - Main page
         run: |
-          echo "Pinging service at $(date)"
-
-          # Ping the service (replace with your actual Render URL)
+          echo "🔔 Pinging main page at $(date)"
           response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/)
-
           echo "Response code: $response"
 
           if [ $response -eq 200 ] || [ $response -eq 302 ]; then
-            echo "✅ Service is alive and responding"
+            echo "✅ Main page responding"
           else
-            echo "⚠️ Service returned unexpected code: $response"
+            echo "⚠️ Main page returned: $response"
+          fi
+
+      - name: Ping Render service - API status
+        run: |
+          echo "🔔 Pinging API status at $(date)"
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/api/status)
+          echo "Response code: $response"
+
+          if [ $response -eq 200 ]; then
+            echo "✅ API status responding"
+          else
+            echo "⚠️ API status returned: $response"
+          fi
+
+      - name: Ping Render service - Health check
+        run: |
+          echo "🔔 Pinging scheduler status at $(date)"
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/api/scheduler/status)
+          echo "Response code: $response"
+
+          if [ $response -eq 200 ]; then
+            echo "✅ Scheduler status responding"
+          else
+            echo "⚠️ Scheduler status returned: $response"
           fi
 
       - name: Keep-alive timestamp
-        run: echo "Last ping - $(date -u)"
+        run: echo "✅ Keep-alive completed - $(date -u)"
