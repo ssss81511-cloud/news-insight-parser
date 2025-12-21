@@ -84,15 +84,14 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, fal_key: Optional[str] = None):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
-            use_ai: Use AI-generated or professional photos
-            pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
-            fal_key: FAL.ai API key for AI image generation (get at https://fal.ai/)
+            use_ai: Use AI-generated images (FREE via Pollinations.ai) or stock photos
+            pexels_key: Pexels API key for stock photo fallback (get free at https://www.pexels.com/api/)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
@@ -100,33 +99,29 @@ class ReelGenerator:
         self.output_dir = output_dir
         self.use_ai = use_ai
         self.pexels_key = pexels_key
-        self.fal_key = fal_key
         os.makedirs(output_dir, exist_ok=True)
 
         # APIs
         self.pexels_api_url = "https://api.pexels.com/v1/search"
-        self.fal_api_url = "https://queue.fal.run/fal-ai/flux/schnell"  # Fast FLUX model on FAL
+        self.pollinations_base_url = "https://image.pollinations.ai/prompt"  # FREE, no API key needed!
 
         # Determine image generation mode
         if use_ai:
-            if fal_key:
-                print(f"[REEL GENERATOR] ✅ AI Image Generation ENABLED (FAL.ai FLUX)", flush=True)
-                self.image_mode = 'ai_generate'
-            elif pexels_key:
+            print(f"[REEL GENERATOR] ✅ AI Image Generation ENABLED (Pollinations.ai - FREE!)", flush=True)
+            self.image_mode = 'ai_generate'
+            if pexels_key:
+                print(f"[REEL GENERATOR] ℹ️  Pexels fallback available", flush=True)
+        else:
+            if pexels_key:
                 print(f"[REEL GENERATOR] ✅ Stock Photos ENABLED (Pexels)", flush=True)
                 self.image_mode = 'stock_photos'
             else:
-                print(f"[REEL GENERATOR] ⚠️  No API keys - using gradient fallback", flush=True)
-                print(f"[REEL GENERATOR] ℹ️  Get FAL.ai key: https://fal.ai/dashboard/keys", flush=True)
-                print(f"[REEL GENERATOR] ℹ️  Get Pexels key: https://www.pexels.com/api/", flush=True)
+                print(f"[REEL GENERATOR] ⚠️  Using gradient backgrounds", flush=True)
                 self.image_mode = 'gradient'
-        else:
-            print(f"[REEL GENERATOR] ⚠️  AI generation DISABLED - using gradients", flush=True)
-            self.image_mode = 'gradient'
 
     def _generate_ai_image(self, title: str, keywords: List[str]) -> Optional[Image.Image]:
         """
-        Generate image using FAL.ai FLUX API (ultra-fast)
+        Generate image using Pollinations.ai (100% FREE, no API key needed!)
 
         Args:
             title: Content title
@@ -135,78 +130,34 @@ class ReelGenerator:
         Returns:
             PIL Image or None if failed
         """
-        if not self.fal_key:
-            print(f"[AI GEN] No FAL.ai key - skipping", flush=True)
-            return None
-
         # Create optimized prompt
         prompt = self._create_ai_prompt(title, keywords)
-        print(f"[AI GEN] 🎨 FAL.ai generating: {prompt[:80]}...", flush=True)
+        print(f"[AI GEN] 🎨 Pollinations.ai generating: {prompt[:80]}...", flush=True)
 
         try:
-            headers = {
-                "Authorization": f"Key {self.fal_key}",
-                "Content-Type": "application/json"
-            }
+            # URL encode the prompt
+            import urllib.parse
+            encoded_prompt = urllib.parse.quote(prompt)
 
-            payload = {
-                "prompt": prompt,
-                "image_size": "square",  # 1024x1024
-                "num_inference_steps": 4,  # Fast FLUX schnell
-                "num_images": 1,
-                "enable_safety_checker": False  # For speed
-            }
+            # Build Pollinations.ai URL (simple and elegant!)
+            image_url = f"{self.pollinations_base_url}/{encoded_prompt}?width=1024&height=1024&nologo=true&model=flux"
 
-            # FAL uses queue system for fast async processing
-            response = requests.post(
-                self.fal_api_url,
-                headers=headers,
-                json=payload,
-                timeout=30  # FAL is very fast (2-3 seconds)
-            )
+            print(f"[AI GEN] 🌐 Requesting: {image_url[:100]}...", flush=True)
+
+            # Download image directly (Pollinations returns image immediately)
+            response = requests.get(image_url, timeout=30)
 
             if response.status_code == 200:
-                result = response.json()
-                print(f"[AI GEN] 📦 FAL Response keys: {list(result.keys())}", flush=True)
-
-                # FAL can return different formats - check both
-                image_url = None
-
-                # Format 1: {'images': [{'url': '...'}]}
-                if 'images' in result and len(result['images']) > 0:
-                    if isinstance(result['images'][0], dict):
-                        image_url = result['images'][0].get('url')
-                    else:
-                        image_url = result['images'][0]
-
-                # Format 2: {'image': {'url': '...'}}
-                elif 'image' in result:
-                    if isinstance(result['image'], dict):
-                        image_url = result['image'].get('url')
-                    else:
-                        image_url = result['image']
-
-                # Format 3: Direct URL in response
-                elif 'url' in result:
-                    image_url = result['url']
-
-                if image_url:
-                    print(f"[AI GEN] ⬇️  Downloading from FAL: {image_url[:50]}...", flush=True)
-
-                    # Download image
-                    img_response = requests.get(image_url, timeout=15)
-                    if img_response.status_code == 200:
-                        image = Image.open(io.BytesIO(img_response.content))
-                        print(f"[AI GEN] ✅ FAL generated: {image.size} (FAST!)", flush=True)
-                        return image
-                    else:
-                        print(f"[AI GEN] ❌ Failed to download image from URL", flush=True)
-                        return None
+                # Check if we got an image
+                if response.headers.get('content-type', '').startswith('image/'):
+                    image = Image.open(io.BytesIO(response.content))
+                    print(f"[AI GEN] ✅ Pollinations generated: {image.size} (FREE!)", flush=True)
+                    return image
                 else:
-                    print(f"[AI GEN] ❌ No image URL in response. Full response: {str(result)[:200]}", flush=True)
+                    print(f"[AI GEN] ❌ Response is not an image: {response.headers.get('content-type')}", flush=True)
                     return None
             else:
-                print(f"[AI GEN] ❌ FAL Error {response.status_code}: {response.text[:200]}", flush=True)
+                print(f"[AI GEN] ❌ Pollinations Error {response.status_code}", flush=True)
                 return None
 
         except Exception as e:
@@ -451,11 +402,10 @@ class ReelGenerator:
         img = None
 
         print(f"[REEL] 🔍 Image mode: {self.image_mode}", flush=True)
-        print(f"[REEL] 🔑 FAL key: {'✅ SET (' + self.fal_key[:20] + '...)' if self.fal_key else '❌ NOT SET'}", flush=True)
 
         if self.image_mode == 'ai_generate':
-            # AI Image Generation (FAL.ai FLUX)
-            print(f"[REEL] 🎨 Starting AI Image Generation (FAL.ai)", flush=True)
+            # AI Image Generation (Pollinations.ai - FREE!)
+            print(f"[REEL] 🎨 Starting AI Image Generation (Pollinations.ai - FREE)", flush=True)
             img = self._generate_ai_image(title, search_keywords)
 
             if img:
@@ -787,20 +737,19 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, fal_key: Optional[str] = None):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
-        use_ai: Use AI-generated images or professional stock photos instead of gradients
-        pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
-        fal_key: FAL.ai API key for AI image generation (ultra-fast FLUX, get at https://fal.ai/)
+        use_ai: Use AI-generated images (FREE via Pollinations.ai) or stock photos
+        pexels_key: Pexels API key for stock photo fallback (get free at https://www.pexels.com/api/)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key, fal_key=fal_key)
+        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key)
     else:
         return MockReelGenerator(output_dir)

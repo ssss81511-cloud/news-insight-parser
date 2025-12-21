@@ -70,8 +70,7 @@ scheduler = get_scheduler()
 # Environment variables for automation
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHANNEL_ID = os.getenv('TELEGRAM_CHANNEL_ID')
-PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')  # For stock photos - get free at https://www.pexels.com/api/
-FAL_API_KEY = os.getenv('FAL_API_KEY')  # For AI image generation - ultra-fast FLUX (get at https://fal.ai/)
+PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')  # For stock photo fallback - get free at https://www.pexels.com/api/
 AUTO_GENERATE_ENABLED = os.getenv('AUTO_GENERATE_ENABLED', 'false').lower() == 'true'
 AUTO_GENERATE_HOUR = int(os.getenv('AUTO_GENERATE_HOUR', '9'))
 AUTO_GENERATE_MINUTE = int(os.getenv('AUTO_GENERATE_MINUTE', '0'))
@@ -87,16 +86,15 @@ logger = logging.getLogger(__name__)
 # Initialize automation components
 topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
 
-# IMPORTANT: use_ai=True enables AI image generation (FAL.ai) or stock photos (Pexels)
-# Priority: FAL.ai AI (ultra-fast) > Pexels Stock > Gradient Fallback
-print(f"[STARTUP] FAL_API_KEY: {'✅ SET' if FAL_API_KEY else '❌ NOT SET'}", flush=True)
-print(f"[STARTUP] PEXELS_API_KEY: {'✅ SET' if PEXELS_API_KEY else '❌ NOT SET'}", flush=True)
+# IMPORTANT: use_ai=True enables FREE AI image generation via Pollinations.ai
+# Priority: Pollinations AI (FREE!) > Pexels Stock > Gradient Fallback
+print(f"[STARTUP] AI Image Generation: Pollinations.ai (FREE - no API key needed!)", flush=True)
+print(f"[STARTUP] PEXELS_API_KEY (fallback): {'✅ SET' if PEXELS_API_KEY else '❌ NOT SET'}", flush=True)
 
 reel_generator = create_reel_generator(
     output_dir='generated_reels',
-    use_ai=True,
-    pexels_key=PEXELS_API_KEY,
-    fal_key=FAL_API_KEY
+    use_ai=True,  # FREE AI generation via Pollinations!
+    pexels_key=PEXELS_API_KEY
 )
 
 # Initialize Telegram poster if credentials are provided

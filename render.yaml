@@ -17,11 +17,9 @@ services:
       - key: GROQ_API_KEY
         sync: false  # Установишь вручную в Dashboard
 
-      # Image Generation (Optional - для AI картинок)
-      - key: FAL_API_KEY
-        sync: false  # Ultra-fast FLUX AI generation - get at https://fal.ai/dashboard/keys
+      # Image Generation (FREE AI via Pollinations.ai - no key needed!)
       - key: PEXELS_API_KEY
-        sync: false  # Fallback для stock фото - get free at https://www.pexels.com/api/
+        sync: false  # Optional fallback для stock фото - get free at https://www.pexels.com/api/
 
       # Telegram (Optional - для автопостинга)
       - key: TELEGRAM_BOT_TOKEN
