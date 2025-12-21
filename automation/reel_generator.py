@@ -84,14 +84,15 @@ class ReelGenerator:
         }
     }
 
-    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
+    def __init__(self, output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, huggingface_key: Optional[str] = None):
         """
         Initialize ReelGenerator
 
         Args:
             output_dir: Directory to save generated images
-            use_ai: Use professional photos from Pexels
-            pexels_key: Pexels API key (get free at https://www.pexels.com/api/)
+            use_ai: Use AI-generated or professional photos
+            pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
+            huggingface_key: HuggingFace API key for AI image generation (get free at https://huggingface.co/settings/tokens)
         """
         if not PIL_AVAILABLE:
             raise ImportError("Pillow is required for ReelGenerator. Install with: pip install Pillow")
@@ -99,17 +100,115 @@ class ReelGenerator:
         self.output_dir = output_dir
         self.use_ai = use_ai
         self.pexels_key = pexels_key
+        self.huggingface_key = huggingface_key
         os.makedirs(output_dir, exist_ok=True)
 
-        # Pexels API for professional stock photos (FREE with API key)
+        # APIs
         self.pexels_api_url = "https://api.pexels.com/v1/search"
+        self.hf_api_url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"  # Fast Flux model
 
-        if use_ai and not pexels_key:
-            print(f"[REEL GENERATOR] ⚠️  WARNING: No Pexels API key!", flush=True)
-            print(f"[REEL GENERATOR] ⚠️  Get free key: https://www.pexels.com/api/", flush=True)
-            print(f"[REEL GENERATOR] ⚠️  Will use gradient fallback", flush=True)
+        # Determine image generation mode
+        if use_ai:
+            if huggingface_key:
+                print(f"[REEL GENERATOR] ✅ AI Image Generation ENABLED (HuggingFace FLUX)", flush=True)
+                self.image_mode = 'ai_generate'
+            elif pexels_key:
+                print(f"[REEL GENERATOR] ✅ Stock Photos ENABLED (Pexels)", flush=True)
+                self.image_mode = 'stock_photos'
+            else:
+                print(f"[REEL GENERATOR] ⚠️  No API keys - using gradient fallback", flush=True)
+                print(f"[REEL GENERATOR] ℹ️  Get HuggingFace key: https://huggingface.co/settings/tokens", flush=True)
+                print(f"[REEL GENERATOR] ℹ️  Get Pexels key: https://www.pexels.com/api/", flush=True)
+                self.image_mode = 'gradient'
+        else:
+            print(f"[REEL GENERATOR] ⚠️  AI generation DISABLED - using gradients", flush=True)
+            self.image_mode = 'gradient'
 
-        print(f"[REEL GENERATOR] Initialized: Photos={use_ai}, Pexels={'✅' if pexels_key else '❌ (gradient fallback)'}", flush=True)
+    def _generate_ai_image(self, title: str, keywords: List[str]) -> Optional[Image.Image]:
+        """
+        Generate image using HuggingFace Inference API (FLUX model)
+
+        Args:
+            title: Content title
+            keywords: Keywords for prompt
+
+        Returns:
+            PIL Image or None if failed
+        """
+        if not self.huggingface_key:
+            print(f"[AI GEN] No HuggingFace key - skipping", flush=True)
+            return None
+
+        # Create optimized prompt
+        prompt = self._create_ai_prompt(title, keywords)
+        print(f"[AI GEN] Generating image with prompt: {prompt[:100]}...", flush=True)
+
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.huggingface_key}"
+            }
+
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "guidance_scale": 3.5,  # Lower for FLUX
+                    "num_inference_steps": 4,  # Fast FLUX model needs only 4 steps
+                    "width": 1024,
+                    "height": 1024
+                }
+            }
+
+            response = requests.post(
+                self.hf_api_url,
+                headers=headers,
+                json=payload,
+                timeout=60  # AI generation can take time
+            )
+
+            if response.status_code == 200:
+                # Response is image bytes
+                image = Image.open(io.BytesIO(response.content))
+                print(f"[AI GEN] ✅ Generated image: {image.size}", flush=True)
+                return image
+            elif response.status_code == 503:
+                print(f"[AI GEN] ⚠️  Model loading (503) - try again in 20s or use fallback", flush=True)
+                return None
+            else:
+                print(f"[AI GEN] ❌ Error {response.status_code}: {response.text[:200]}", flush=True)
+                return None
+
+        except Exception as e:
+            print(f"[AI GEN] ❌ Exception: {e}", flush=True)
+            return None
+
+    def _create_ai_prompt(self, title: str, keywords: List[str]) -> str:
+        """
+        Create optimized prompt for AI image generation
+
+        Args:
+            title: Content title
+            keywords: Topic keywords
+
+        Returns:
+            Optimized prompt for FLUX/Stable Diffusion
+        """
+        # Extract main topic from keywords
+        topic = ', '.join(keywords[:3]) if keywords else title[:50]
+
+        # Professional, modern prompts for tech/business content
+        prompts = [
+            f"Modern minimalist illustration about {topic}, professional design, vibrant gradient background, clean geometric shapes, tech aesthetic, high quality digital art",
+            f"Abstract tech visualization for {topic}, futuristic style, glowing elements, deep blue and purple tones, professional corporate design, 4k quality",
+            f"Sleek business graphic about {topic}, modern flat design, bold colors, professional layout, startup aesthetic, digital illustration",
+            f"Contemporary tech artwork for {topic}, minimalist style, vibrant accents, clean composition, professional branding, high-end design",
+            f"Professional infographic style image about {topic}, modern color palette, abstract geometric patterns, tech industry aesthetic, premium quality"
+        ]
+
+        # Rotate through prompts based on title hash for variety
+        import hashlib
+        index = int(hashlib.md5(title.encode()).hexdigest(), 16) % len(prompts)
+
+        return prompts[index]
 
     def _fetch_pexels_photo(self, keywords: List[str]) -> Optional[Image.Image]:
         """
@@ -313,43 +412,46 @@ class ReelGenerator:
         width, height = self.ASPECT_RATIOS.get(aspect_ratio, self.ASPECT_RATIOS['reel'])
         colors = self.COLOR_SCHEMES.get(style, self.COLOR_SCHEMES['modern'])
 
-        # Use professional photos if enabled
-        if self.use_ai:
-            print(f"[REEL] ✅ Professional photos ENABLED", flush=True)
-            # Use keywords (hashtags) for photo search
-            search_keywords = keywords if keywords else []
-            print(f"[REEL] 🔍 Keywords: {search_keywords}", flush=True)
+        # Generate or fetch background image based on mode
+        search_keywords = keywords if keywords else []
+        img = None
 
-            # Try to fetch photo from Pexels
+        if self.image_mode == 'ai_generate':
+            # AI Image Generation (HuggingFace FLUX)
+            print(f"[REEL] 🎨 AI Image Generation mode", flush=True)
+            img = self._generate_ai_image(title, search_keywords)
+
+            if img:
+                # Resize to target dimensions
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
+                # Add overlay for text readability
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
+                img = img.convert('RGBA')
+                img = Image.alpha_composite(img, overlay)
+                img = img.convert('RGB')
+                print(f"[REEL] ✅ Using AI-generated image", flush=True)
+
+        if img is None and self.image_mode in ['ai_generate', 'stock_photos']:
+            # Stock Photos (Pexels) - fallback or primary
+            print(f"[REEL] 📷 Stock photos mode (or AI fallback)", flush=True)
             photo = self._fetch_pexels_photo(search_keywords)
 
             if photo:
-                # Resize photo to target dimensions
                 img = photo.resize((width, height), Image.Resampling.LANCZOS)
-
-                # Add semi-transparent overlay for text readability
                 overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))
                 img = img.convert('RGBA')
                 img = Image.alpha_composite(img, overlay)
                 img = img.convert('RGB')
+                print(f"[REEL] ✅ Using Pexels stock photo", flush=True)
 
-                print(f"[REEL] ✅ Using Pexels photo", flush=True)
-            else:
-                # Fallback to gradient if photo fetch failed
-                print(f"[REEL] ⚠️  Photo fetch failed - using gradient fallback", flush=True)
-                img = self._generate_gradient_background(search_keywords, width, height)
-
-                # Add subtle overlay
-                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
-                img = img.convert('RGBA')
-                img = Image.alpha_composite(img, overlay)
-                img = img.convert('RGB')
-
-                print(f"[REEL] ✅ Using gradient background", flush=True)
-        else:
-            # Create basic colored background
-            print(f"[REEL] ⚠️  AI generation DISABLED - using colored background", flush=True)
-            img = Image.new('RGB', (width, height), colors['background'])
+        if img is None:
+            # Gradient fallback (final fallback or primary if no AI/photos)
+            print(f"[REEL] 🎨 Using gradient background (fallback)", flush=True)
+            img = self._generate_gradient_background(search_keywords, width, height)
+            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+            img = img.convert('RGBA')
+            img = Image.alpha_composite(img, overlay)
+            img = img.convert('RGB')
 
         draw = ImageDraw.Draw(img)
 
@@ -643,19 +745,20 @@ class MockReelGenerator:
 
 
 # Factory function to get appropriate generator
-def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None):
+def create_reel_generator(output_dir: str = 'generated_reels', use_ai: bool = True, pexels_key: Optional[str] = None, huggingface_key: Optional[str] = None):
     """
     Create ReelGenerator or MockReelGenerator depending on Pillow availability
 
     Args:
         output_dir: Directory for generated images
-        use_ai: Use professional stock photos (Pexels) instead of basic backgrounds
-        pexels_key: Pexels API key (get free at https://www.pexels.com/api/)
+        use_ai: Use AI-generated images or professional stock photos instead of gradients
+        pexels_key: Pexels API key for stock photos (get free at https://www.pexels.com/api/)
+        huggingface_key: HuggingFace API key for AI image generation (get free at https://huggingface.co/settings/tokens)
 
     Returns:
         ReelGenerator or MockReelGenerator instance
     """
     if PIL_AVAILABLE:
-        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key)
+        return ReelGenerator(output_dir, use_ai=use_ai, pexels_key=pexels_key, huggingface_key=huggingface_key)
     else:
         return MockReelGenerator(output_dir)

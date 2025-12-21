@@ -650,32 +650,77 @@ class UniversalDatabaseManager:
             print(f"Error marking topic as used: {e}")
             return 0
 
-    def is_topic_used_recently(self, keywords: List[str], exclude_days: int = 30) -> bool:
+    def _are_topics_similar(self, keywords1: List[str], keywords2: List[str], threshold: float = 0.5) -> bool:
         """
-        Check if topic was used recently
+        Check if two topics are similar based on keyword overlap
+
+        Uses Jaccard similarity: intersection / union
+
+        Args:
+            keywords1: First topic keywords
+            keywords2: Second topic keywords
+            threshold: Similarity threshold (0.0 to 1.0, default 0.5)
+
+        Returns:
+            True if topics are similar (above threshold)
+        """
+        # Normalize keywords
+        set1 = set(k.lower().strip() for k in keywords1)
+        set2 = set(k.lower().strip() for k in keywords2)
+
+        if not set1 or not set2:
+            return False
+
+        # Jaccard similarity = intersection / union
+        intersection = len(set1 & set2)
+        union = len(set1 | set2)
+
+        similarity = intersection / union if union > 0 else 0.0
+
+        return similarity >= threshold
+
+    def is_topic_used_recently(self, keywords: List[str], exclude_days: int = 30, similarity_threshold: float = 0.5) -> bool:
+        """
+        Check if topic (or similar topic) was used recently
 
         Args:
             keywords: List of keywords defining the topic
             exclude_days: Number of days to look back (default: 30)
+            similarity_threshold: How similar keywords need to be (0.5 = 50% overlap)
 
         Returns:
-            True if topic was used within exclude_days, False otherwise
+            True if topic or similar topic was used within exclude_days
         """
         try:
-            # Create hash of keywords
-            keywords_sorted = sorted([k.lower().strip() for k in keywords])
-            keywords_str = '|||'.join(keywords_sorted)
-            keywords_hash = hashlib.sha256(keywords_str.encode()).hexdigest()
-
             cutoff_date = datetime.now(timezone.utc) - timedelta(days=exclude_days)
 
-            # Check if this topic was used recently
-            used = self.session.query(UsedTopic).filter(
-                UsedTopic.keywords_hash == keywords_hash,
+            # Get all recently used topics
+            recent_topics = self.session.query(UsedTopic).filter(
                 UsedTopic.used_at >= cutoff_date
-            ).first()
+            ).all()
 
-            return used is not None
+            # Check if any recent topic is similar
+            for used_topic in recent_topics:
+                try:
+                    # Parse keywords from used topic
+                    used_keywords = json.loads(used_topic.keywords) if isinstance(used_topic.keywords, str) else used_topic.keywords
+
+                    # Check similarity
+                    if self._are_topics_similar(keywords, used_keywords, similarity_threshold):
+                        # Calculate actual similarity for logging
+                        set1 = set(k.lower().strip() for k in keywords)
+                        set2 = set(k.lower().strip() for k in used_keywords)
+                        intersection = len(set1 & set2)
+                        union = len(set1 | set2)
+                        similarity = intersection / union if union > 0 else 0.0
+
+                        print(f"[TOPIC FILTER] Similar topic found! New: {keywords[:3]}, Used: {used_keywords[:3]}, Similarity: {similarity:.2f}", flush=True)
+                        return True
+                except:
+                    # If can't parse keywords, skip this topic
+                    continue
+
+            return False
         except Exception as e:
             self.reset_session()
             return False
