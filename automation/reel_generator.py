@@ -353,14 +353,36 @@ class ReelGenerator:
 
         draw = ImageDraw.Draw(img)
 
+        # Adaptive font sizes and margins based on aspect ratio
+        if aspect_ratio == 'square':
+            # Square needs smaller fonts and tighter spacing
+            title_font_size = 60
+            points_font_size = 38
+            footer_font_size = 32
+            margin = 50
+            max_key_points = 4  # Limit points for square
+        elif aspect_ratio in ['reel', 'story']:
+            # Vertical formats have more space
+            title_font_size = 80
+            points_font_size = 50
+            footer_font_size = 40
+            margin = 60
+            max_key_points = 5
+        else:
+            # Landscape formats
+            title_font_size = 70
+            points_font_size = 45
+            footer_font_size = 35
+            margin = 60
+            max_key_points = 5
+
         # Load fonts with proper Linux font fallback
-        title_font = self._get_font(80)
-        points_font = self._get_font(50)
-        footer_font = self._get_font(40)
+        title_font = self._get_font(title_font_size)
+        points_font = self._get_font(points_font_size)
+        footer_font = self._get_font(footer_font_size)
 
         # Calculate layout
-        margin = 60
-        y_pos = margin + 40
+        y_pos = margin + 30
 
         # Draw title
         title_wrapped = self._wrap_text(title, width - 2 * margin, title_font, draw)
@@ -376,18 +398,19 @@ class ReelGenerator:
             y_pos += text_height + 20
 
         # Add accent line
-        y_pos += 40
-        line_width = min(400, width - 2 * margin)
+        accent_spacing = 25 if aspect_ratio == 'square' else 40
+        y_pos += accent_spacing
+        line_width = min(350 if aspect_ratio == 'square' else 400, width - 2 * margin)
         line_x = (width - line_width) // 2
         draw.rectangle(
-            [(line_x, y_pos), (line_x + line_width, y_pos + 6)],
+            [(line_x, y_pos), (line_x + line_width, y_pos + 5)],
             fill=colors['accent']
         )
-        y_pos += 60
+        y_pos += accent_spacing + 20
 
         # Draw key points
-        bullet_radius = 12
-        for i, point in enumerate(key_points[:5], 1):  # Max 5 points
+        bullet_radius = 10 if aspect_ratio == 'square' else 12
+        for i, point in enumerate(key_points[:max_key_points], 1):
             # Draw bullet point
             bullet_x = margin + 30
             bullet_y = y_pos + 30
@@ -408,13 +431,14 @@ class ReelGenerator:
                 draw
             )
 
-            point_x = bullet_x + bullet_radius + 30
+            point_x = bullet_x + bullet_radius + 25
             for line in point_wrapped:
                 draw.text((point_x, y_pos), line, fill=colors['text'], font=points_font)
                 bbox = draw.textbbox((0, 0), line, font=points_font)
-                y_pos += bbox[3] - bbox[1] + 10
+                y_pos += bbox[3] - bbox[1] + 8
 
-            y_pos += 30  # Space between points
+            # Space between points - less for square
+            y_pos += 20 if aspect_ratio == 'square' else 30
 
         # Draw footer if provided
         if footer_text:
@@ -578,7 +602,7 @@ class ReelGenerator:
             keywords=keywords,  # Pass hashtags as keywords for AI prompt
             aspect_ratio=aspect_ratio,
             style=style,
-            footer_text='News Insight Parser'
+            footer_text=None  # No watermark
         )
 
     def get_available_styles(self) -> List[str]:

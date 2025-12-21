@@ -117,14 +117,32 @@ class TelegramPoster:
         message_text = self._format_message(content)
 
         # Telegram limits:
-        # - Photo caption: 1024 characters
-        # - Text message: 4096 characters
+        # - Photo caption: 1024 characters MAX
+        # - Text message: 4096 characters MAX
         if media_path and len(message_text) > 1024:
-            print(f"[TELEGRAM POSTER] Caption too long ({len(message_text)} chars), truncating to 1000...", flush=True)
-            message_text = message_text[:1000] + "\n\n..."
-        elif len(message_text) > 4000:
-            print(f"[TELEGRAM POSTER] Message too long ({len(message_text)} chars), truncating...", flush=True)
-            message_text = message_text[:3900] + "\n\n... (полный текст слишком длинный)"
+            print(f"[TELEGRAM POSTER] Caption too long ({len(message_text)} chars), truncating to 1020...", flush=True)
+            # Smart truncation - try to cut at sentence boundary
+            truncated = message_text[:1020]
+            # Find last sentence ending
+            last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+            if last_period > 900:  # If we can cut at sentence, do it
+                message_text = truncated[:last_period+1]
+            else:
+                message_text = truncated[:1017] + "..."
+        elif len(message_text) > 4096:
+            print(f"[TELEGRAM POSTER] Message too long ({len(message_text)} chars), truncating to 4090...", flush=True)
+            # Smart truncation - try to cut at paragraph boundary
+            truncated = message_text[:4090]
+            # Find last paragraph or sentence
+            last_newline = truncated.rfind('\n\n')
+            last_period = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+
+            if last_newline > 3800:  # Cut at paragraph
+                message_text = truncated[:last_newline]
+            elif last_period > 3800:  # Cut at sentence
+                message_text = truncated[:last_period+1]
+            else:
+                message_text = truncated[:4087] + "..."
 
         # Post with retries
         for attempt in range(self.max_retries):

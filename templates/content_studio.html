@@ -510,6 +510,31 @@ document.getElementById('copy-btn').addEventListener('click', function() {
     });
 });
 
+// View content
+document.querySelectorAll('.view-content').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const contentId = this.dataset.id;
+
+        try {
+            const response = await fetch(`/api/generated-content`);
+            const allContent = await response.json();
+
+            // Find the specific content by ID
+            const content = allContent.find(c => c.id == contentId);
+
+            if (content) {
+                displayGeneratedContent(content);
+                // Scroll to preview
+                document.querySelector('.preview-panel').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert('Контент не найден');
+            }
+        } catch (error) {
+            alert('Ошибка загрузки контента: ' + error.message);
+        }
+    });
+});
+
 // Delete content
 document.querySelectorAll('.delete-content').forEach(btn => {
     btn.addEventListener('click', async function() {
