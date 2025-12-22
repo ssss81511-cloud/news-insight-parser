@@ -14,6 +14,8 @@ data/*.db
 
 # Environment
 .env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -25,3 +27,7 @@ data/*.db
 # Logs
 *.log
 nul
+
+# Generated files
+generated_reels/
+data/scheduler_config.json

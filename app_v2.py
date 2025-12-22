@@ -54,11 +54,13 @@ signal_detector = EnhancedSignalDetector(db)
 insights_analyzer = InsightsAnalyzer(db)
 
 # AI analyzer (Groq)
-GROQ_API_KEY = os.getenv('GROQ_API_KEY', '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')
-ai_analyzer = AIAnalyzer(api_key=GROQ_API_KEY)
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+if not GROQ_API_KEY:
+    logger.warning("GROQ_API_KEY not set - AI features will be disabled")
+ai_analyzer = AIAnalyzer(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # Content generator for social media
-content_generator = ContentGenerator(api_key=GROQ_API_KEY, db_manager=db)
+content_generator = ContentGenerator(api_key=GROQ_API_KEY, db_manager=db) if GROQ_API_KEY else None
 
 # Scheduler for automatic parsing
 scheduler = get_scheduler()
