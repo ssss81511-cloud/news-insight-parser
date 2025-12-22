@@ -1,10 +1,9 @@
 """
 Configuration for parsing schedules and rules for each source
 
-Each source has predefined optimal intervals based on:
-- Update frequency
-- API rate limits
-- Data importance
+SIMPLIFIED SCHEDULE: All sources parse 3x daily (every 8 hours)
+Main trigger: GitHub Actions wake-and-run at 9:00, 14:00, 20:00 UTC
+Fallback: Interval-based auto-scheduling (if wake-and-run fails)
 """
 
 PARSING_SCHEDULES = {
@@ -13,39 +12,39 @@ PARSING_SCHEDULES = {
         'enabled_by_default': True,
         'sections': {
             'ask_hn': {
-                'interval_hours': 6,
-                'limit': 20,
-                'description': 'Ask HN - вопросы и обсуждения (обновляется несколько раз в день)'
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
+                'description': 'Ask HN - вопросы и обсуждения'
             },
             'show_hn': {
-                'interval_hours': 6,
-                'limit': 20,
-                'description': 'Show HN - запуски и фидбэк (обновляется несколько раз в день)'
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
+                'description': 'Show HN - запуски и фидбэк'
             },
             'new': {
-                'interval_hours': 1,
-                'limit': 30,
-                'description': 'New - новые посты (обновляется постоянно, парсим чаще)'
+                'interval_hours': 8,  # 3x daily
+                'limit': 50,
+                'description': 'New - новые посты'
             }
         }
     },
 
     'reddit': {
         'name': 'Reddit',
-        'enabled_by_default': False,  # Не активен пока не добавлен парсер
+        'enabled_by_default': False,
         'sections': {
             'startups': {
-                'interval_hours': 4,
+                'interval_hours': 8,  # 3x daily
                 'limit': 50,
                 'description': 'r/startups - стартап-сообщество'
             },
             'SaaS': {
-                'interval_hours': 6,
+                'interval_hours': 8,  # 3x daily
                 'limit': 50,
                 'description': 'r/SaaS - SaaS продукты и обсуждения'
             },
             'entrepreneur': {
-                'interval_hours': 6,
+                'interval_hours': 8,  # 3x daily
                 'limit': 50,
                 'description': 'r/Entrepreneur - предпринимательство'
             }
@@ -54,10 +53,10 @@ PARSING_SCHEDULES = {
 
     'product_hunt': {
         'name': 'Product Hunt',
-        'enabled_by_default': False,  # Активируется после тестирования
+        'enabled_by_default': False,
         'sections': {
             'daily': {
-                'interval_hours': 24,  # Раз в день (новые продукты обновляются ежедневно)
+                'interval_hours': 24,  # 1x daily (products update once per day)
                 'limit': 50,
                 'description': 'Product Hunt - ежедневные запуски продуктов'
             }
@@ -66,31 +65,31 @@ PARSING_SCHEDULES = {
 
     'devto': {
         'name': 'Dev.to',
-        'enabled_by_default': False,  # Активируется после тестирования
+        'enabled_by_default': False,
         'sections': {
             'startup': {
-                'interval_hours': 12,  # Два раза в день
+                'interval_hours': 8,  # 3x daily
                 'limit': 30,
                 'description': 'Dev.to #startup - статьи про стартапы'
             },
             'entrepreneur': {
-                'interval_hours': 12,
+                'interval_hours': 8,  # 3x daily
                 'limit': 30,
                 'description': 'Dev.to #entrepreneur - предпринимательство'
             },
             'saas': {
-                'interval_hours': 12,
+                'interval_hours': 8,  # 3x daily
                 'limit': 30,
                 'description': 'Dev.to #saas - SaaS продукты'
             },
             'buildinpublic': {
-                'interval_hours': 24,  # Раз в день
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'Dev.to #buildinpublic - открытая разработка'
             },
             'indiehacker': {
-                'interval_hours': 24,
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'Dev.to #indiehacker - независимые разработчики'
             }
         }
@@ -98,20 +97,20 @@ PARSING_SCHEDULES = {
 
     'vc_blogs': {
         'name': 'VC Blogs',
-        'enabled_by_default': False,  # Активируется после тестирования
+        'enabled_by_default': False,
         'sections': {
             'yc': {
-                'interval_hours': 48,  # Раз в 2 дня (блоги обновляются редко)
+                'interval_hours': 24,  # 1x daily (blogs update rarely)
                 'limit': 15,
                 'description': 'Y Combinator Blog - YC portfolio and advice'
             },
             'sequoia': {
-                'interval_hours': 48,
+                'interval_hours': 24,  # 1x daily
                 'limit': 10,
                 'description': 'Sequoia Capital - investment insights'
             },
             'a16z': {
-                'interval_hours': 48,
+                'interval_hours': 24,  # 1x daily
                 'limit': 10,
                 'description': 'a16z Future - tech trends and future'
             }
@@ -120,26 +119,26 @@ PARSING_SCHEDULES = {
 
     'techcrunch': {
         'name': 'TechCrunch',
-        'enabled_by_default': False,  # Активируется после тестирования
+        'enabled_by_default': False,
         'sections': {
             'main': {
-                'interval_hours': 6,  # 4 раза в день (новости обновляются часто)
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'TechCrunch Main - все новости'
             },
             'startups': {
-                'interval_hours': 8,  # 3 раза в день
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'Startups - запуски и новости стартапов'
             },
             'funding': {
-                'interval_hours': 12,  # 2 раза в день
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'Venture - раунды финансирования'
             },
             'apps': {
-                'interval_hours': 12,  # 2 раза в день
-                'limit': 20,
+                'interval_hours': 8,  # 3x daily
+                'limit': 30,
                 'description': 'Apps - новые приложения и продукты'
             }
         }

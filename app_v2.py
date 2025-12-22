@@ -90,7 +90,7 @@ topic_selector = TopicSelector(db, insights_analyzer=insights_analyzer)
 # IMPORTANT: use_ai=True enables FREE AI image generation via Pollinations.ai
 # Priority: Pollinations AI (FREE!) > Pexels Stock > Gradient Fallback
 print(f"[STARTUP] AI Image Generation: Pollinations.ai (FREE - no API key needed!)", flush=True)
-print(f"[STARTUP] PEXELS_API_KEY (fallback): {'✅ SET' if PEXELS_API_KEY else '❌ NOT SET'}", flush=True)
+print(f"[STARTUP] PEXELS_API_KEY (fallback): {'SET' if PEXELS_API_KEY else 'NOT SET'}", flush=True)
 
 reel_generator = create_reel_generator(
     output_dir='generated_reels',
@@ -863,6 +863,132 @@ def disable_automation():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@app.route('/api/wake-and-run', methods=['POST', 'GET'])
+def wake_and_run():
+    """
+    Wake-up endpoint that checks for missed tasks and runs them
+
+    Checks:
+    - If parsing is overdue (>6 hours since last parse) -> trigger parsing
+    - If auto-posting is overdue (missed scheduled time today) -> trigger posting
+
+    Returns status of what was triggered
+    """
+    from datetime import datetime, timezone, timedelta
+
+    logger.info("=" * 60)
+    logger.info("WAKE-AND-RUN: Endpoint called")
+    logger.info("=" * 60)
+
+    tasks_triggered = []
+
+    try:
+        # Check if parsing is needed
+        sched_status = scheduler.get_status()
+
+        # Find most recent last_parse across all sources
+        last_parse_time = None
+        for source_name, source_data in sched_status.get('sources', {}).items():
+            if source_data.get('last_parse'):
+                try:
+                    parse_time = datetime.fromisoformat(source_data['last_parse'].replace('Z', '+00:00'))
+                    if last_parse_time is None or parse_time > last_parse_time:
+                        last_parse_time = parse_time
+                except:
+                    pass
+
+        now = datetime.now(timezone.utc)
+        should_parse = False
+
+        if last_parse_time is None:
+            logger.info("WAKE-AND-RUN: No previous parsing found -> triggering parsing")
+            should_parse = True
+        else:
+            hours_since_parse = (now - last_parse_time).total_seconds() / 3600
+            logger.info(f"WAKE-AND-RUN: Last parse was {hours_since_parse:.1f} hours ago")
+
+            if hours_since_parse > 6:
+                logger.info("WAKE-AND-RUN: Parsing is overdue (>6 hours) -> triggering parsing")
+                should_parse = True
+
+        # Trigger parsing if needed
+        if should_parse:
+            if not parser_status['is_running']:
+                thread = threading.Thread(target=run_parser, args=(None, 30))
+                thread.start()
+                tasks_triggered.append('parsing')
+                logger.info("WAKE-AND-RUN: Parsing started in background")
+            else:
+                logger.info("WAKE-AND-RUN: Parsing already running, skipping")
+
+        # Check if auto-posting is needed
+        if auto_system and AUTO_GENERATE_ENABLED:
+            # Parse scheduled hours
+            scheduled_hours = [int(h.strip()) for h in AUTO_GENERATE_HOURS.split(',')]
+
+            # Check if we missed any scheduled time today
+            current_hour = now.hour
+            should_post = False
+
+            # Get last auto-post stats
+            try:
+                stats = auto_system.get_stats()
+                last_post_time = stats.get('last_generation_time')
+
+                if last_post_time:
+                    last_post_dt = datetime.fromisoformat(last_post_time.replace('Z', '+00:00'))
+                    hours_since_post = (now - last_post_dt).total_seconds() / 3600
+
+                    logger.info(f"WAKE-AND-RUN: Last auto-post was {hours_since_post:.1f} hours ago")
+
+                    # If more than 6 hours passed and we're past a scheduled time -> post
+                    if hours_since_post > 6:
+                        for scheduled_hour in scheduled_hours:
+                            if current_hour >= scheduled_hour:
+                                # Check if we missed this scheduled time today
+                                today_scheduled = now.replace(hour=scheduled_hour, minute=AUTO_GENERATE_MINUTE, second=0, microsecond=0)
+                                if now > today_scheduled and last_post_dt < today_scheduled:
+                                    should_post = True
+                                    logger.info(f"WAKE-AND-RUN: Missed scheduled post at {scheduled_hour:02d}:{AUTO_GENERATE_MINUTE:02d} -> triggering")
+                                    break
+                else:
+                    logger.info("WAKE-AND-RUN: No previous auto-posts found -> triggering")
+                    should_post = True
+
+            except Exception as e:
+                logger.warning(f"WAKE-AND-RUN: Could not check auto-post status: {e}")
+                # If we can't determine, don't post to avoid duplicates
+
+            if should_post:
+                try:
+                    result = sync_generate_and_post(auto_system)
+                    if result['success']:
+                        tasks_triggered.append('auto_posting')
+                        logger.info(f"WAKE-AND-RUN: Auto-posting completed - Content ID: {result.get('content_id')}")
+                    else:
+                        logger.error(f"WAKE-AND-RUN: Auto-posting failed - {result.get('error')}")
+                except Exception as e:
+                    logger.error(f"WAKE-AND-RUN: Auto-posting error - {e}", exc_info=True)
+
+        logger.info(f"WAKE-AND-RUN: Tasks triggered: {tasks_triggered if tasks_triggered else 'none'}")
+        logger.info("=" * 60)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Wake-and-run completed',
+            'tasks_triggered': tasks_triggered,
+            'timestamp': now.isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"WAKE-AND-RUN: Error - {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'tasks_triggered': tasks_triggered
+        }), 500
+
+
 def scheduled_content_generation():
     """
     Scheduled job for automated content generation
@@ -1000,6 +1126,7 @@ def init_app():
     print("[OK] Signal prioritization", flush=True)
     print("[OK] Automatic scheduler", flush=True)
     print("[OK] AutoContentSystem", flush=True)
+    print("[OK] Wake-and-run system", flush=True)
     print("=" * 50, flush=True)
     print(f"Registered sources: {', '.join(orchestrator.get_registered_sources())}", flush=True)
     print("=" * 50, flush=True)
@@ -1012,6 +1139,54 @@ def init_app():
         print(f"[PARSER SCHEDULER] Auto-parse: ON | Sources: {', '.join(enabled_sources) if enabled_sources else 'none'}", flush=True)
     else:
         print("[PARSER SCHEDULER] Auto-parse: OFF", flush=True)
+
+    # CHECK FOR MISSED TASKS ON STARTUP
+    print("=" * 50, flush=True)
+    print("[STARTUP] Checking for missed tasks...", flush=True)
+
+    try:
+        from datetime import datetime, timezone
+
+        # Check last parse time
+        last_parse_time = None
+        for source_name, source_data in sched_status.get('sources', {}).items():
+            if source_data.get('last_parse'):
+                try:
+                    parse_time = datetime.fromisoformat(source_data['last_parse'].replace('Z', '+00:00'))
+                    if last_parse_time is None or parse_time > last_parse_time:
+                        last_parse_time = parse_time
+                except:
+                    pass
+
+        now = datetime.now(timezone.utc)
+        should_parse = False
+
+        if last_parse_time is None:
+            print("[STARTUP] No previous parsing found -> will parse on first wake-and-run call", flush=True)
+        else:
+            hours_since_parse = (now - last_parse_time).total_seconds() / 3600
+            print(f"[STARTUP] Last parse was {hours_since_parse:.1f} hours ago", flush=True)
+
+            if hours_since_parse > 6:
+                print("[STARTUP] Parsing is overdue (>6 hours) -> triggering startup parsing", flush=True)
+                should_parse = True
+
+        # Trigger parsing if needed
+        if should_parse:
+            def delayed_startup_parse():
+                """Run parsing after 10 seconds to let server fully start"""
+                import time
+                time.sleep(10)
+                print("[STARTUP] Starting delayed parsing...", flush=True)
+                run_parser(sources=None, limit=30)
+
+            thread = threading.Thread(target=delayed_startup_parse)
+            thread.daemon = True
+            thread.start()
+            print("[STARTUP] Scheduled startup parsing in 10 seconds", flush=True)
+
+    except Exception as e:
+        print(f"[STARTUP] Error checking missed tasks: {e}", flush=True)
 
     # Start automation scheduler
     automation_scheduler.start()

@@ -1,51 +1,90 @@
-name: Keep Render Service Alive
+name: Wake and Run Parser
 
 on:
   schedule:
-    # Runs every 5 minutes to keep Render awake (free tier sleeps after 15 min)
-    - cron: '*/5 * * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+    # Run 3 times daily at 8:55, 13:55, 19:55 UTC (5 min before parsing/posting)
+    # This wakes up Render before scheduled tasks
+    - cron: '55 8,13,19 * * *'
+  workflow_dispatch: # Manual trigger
 
 jobs:
-  ping:
+  wake-server:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Ping Render service - Main page
+      - name: Wake server and trigger tasks
         run: |
-          echo "🔔 Pinging main page at $(date)"
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/)
-          echo "Response code: $response"
+          echo "🚀 Waking server and triggering tasks at $(date -u)"
+          echo "============================================"
 
-          if [ $response -eq 200 ] || [ $response -eq 302 ]; then
-            echo "✅ Main page responding"
+          MAX_RETRIES=10
+          RETRY_DELAY=30
+          SUCCESS=false
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo ""
+            echo "Attempt $i/$MAX_RETRIES..."
+
+            # Try to call wake-and-run endpoint
+            RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 60 \
+              -X POST \
+              https://news-insight-parser.onrender.com/api/wake-and-run)
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            echo "HTTP Status: $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Server responded successfully!"
+              echo "Response: $BODY"
+
+              # Parse and display triggered tasks
+              TASKS=$(echo "$BODY" | grep -o '"tasks_triggered":\[[^]]*\]' || echo "[]")
+              echo "Tasks triggered: $TASKS"
+
+              SUCCESS=true
+              break
+            else
+              echo "⚠️ Server returned: $HTTP_CODE"
+              echo "Response: $BODY"
+
+              if [ $i -lt $MAX_RETRIES ]; then
+                echo "Waiting ${RETRY_DELAY}s before retry..."
+                sleep $RETRY_DELAY
+              fi
+            fi
+          done
+
+          echo ""
+          echo "============================================"
+
+          if [ "$SUCCESS" = true ]; then
+            echo "✅ Wake-and-run completed successfully"
+            exit 0
           else
-            echo "⚠️ Main page returned: $response"
+            echo "❌ Failed to wake server after $MAX_RETRIES attempts"
+            echo "Server may be down or experiencing issues"
+            exit 1
           fi
 
-      - name: Ping Render service - API status
+      - name: Verify server is alive
+        if: success()
         run: |
-          echo "🔔 Pinging API status at $(date)"
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/api/status)
-          echo "Response code: $response"
+          echo ""
+          echo "🔍 Verifying server status..."
 
-          if [ $response -eq 200 ]; then
-            echo "✅ API status responding"
-          else
-            echo "⚠️ API status returned: $response"
-          fi
+          STATUS=$(curl -s https://news-insight-parser.onrender.com/api/status | head -c 500)
+          echo "Server status: $STATUS"
 
-      - name: Ping Render service - Health check
+          echo "✅ Server is alive and responding"
+
+      - name: Completion summary
+        if: always()
         run: |
-          echo "🔔 Pinging scheduler status at $(date)"
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://news-insight-parser.onrender.com/api/scheduler/status)
-          echo "Response code: $response"
-
-          if [ $response -eq 200 ]; then
-            echo "✅ Scheduler status responding"
-          else
-            echo "⚠️ Scheduler status returned: $response"
-          fi
-
-      - name: Keep-alive timestamp
-        run: echo "✅ Keep-alive completed - $(date -u)"
+          echo ""
+          echo "============================================"
+          echo "Wake-and-run workflow completed at $(date -u)"
+          echo "Next run: Check GitHub Actions schedule"
+          echo "============================================"
