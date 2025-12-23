@@ -10,7 +10,7 @@ on:
 jobs:
   wake-server:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     steps:
       - name: Wake server and trigger tasks
@@ -18,16 +18,16 @@ jobs:
           echo "🚀 Waking server and triggering tasks at $(date -u)"
           echo "============================================"
 
-          MAX_RETRIES=10
-          RETRY_DELAY=30
+          MAX_RETRIES=15
+          RETRY_DELAY=45
           SUCCESS=false
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo ""
             echo "Attempt $i/$MAX_RETRIES..."
 
-            # Try to call wake-and-run endpoint
-            RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 60 \
+            # Try to call wake-and-run endpoint (increased timeout for cold starts)
+            RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 120 \
               -X POST \
               https://news-insight-parser.onrender.com/api/wake-and-run)
 
