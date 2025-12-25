@@ -894,6 +894,9 @@ def wake_and_run():
             if source_data.get('last_parse'):
                 try:
                     parse_time = datetime.fromisoformat(source_data['last_parse'].replace('Z', '+00:00'))
+                    # Ensure timezone-aware (assume UTC if naive)
+                    if parse_time.tzinfo is None:
+                        parse_time = parse_time.replace(tzinfo=timezone.utc)
                     if last_parse_time is None or parse_time > last_parse_time:
                         last_parse_time = parse_time
                 except:
@@ -939,6 +942,9 @@ def wake_and_run():
 
                 if last_post_time:
                     last_post_dt = datetime.fromisoformat(last_post_time.replace('Z', '+00:00'))
+                    # Ensure timezone-aware (assume UTC if naive)
+                    if last_post_dt.tzinfo is None:
+                        last_post_dt = last_post_dt.replace(tzinfo=timezone.utc)
                     hours_since_post = (now - last_post_dt).total_seconds() / 3600
 
                     logger.info(f"WAKE-AND-RUN: Last auto-post was {hours_since_post:.1f} hours ago")
@@ -1155,6 +1161,9 @@ def init_app():
             if source_data.get('last_parse'):
                 try:
                     parse_time = datetime.fromisoformat(source_data['last_parse'].replace('Z', '+00:00'))
+                    # Ensure timezone-aware (assume UTC if naive)
+                    if parse_time.tzinfo is None:
+                        parse_time = parse_time.replace(tzinfo=timezone.utc)
                     if last_parse_time is None or parse_time > last_parse_time:
                         last_parse_time = parse_time
                 except:
